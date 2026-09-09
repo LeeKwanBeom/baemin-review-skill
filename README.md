@@ -5,7 +5,8 @@
 ## 이 저장소의 역할
 
 **기록 보관소다. 실행 경로가 아니다.**
-스킬은 설치본(`/mnt/skills/plugins/baemin-review/SKILL.md`)을 읽고 돈다.
+스킬은 설치본을 읽고 돈다 — 그 경로는 스킬 호출 헤더의 `Base directory for this skill:` 줄이 알려준다
+(2026-09-09 실측: `/root/.claude/skills/synced/<uuid>_<uuid>/baemin-review/SKILL.md`. 예전에 적혀 있던 `/mnt/skills/plugins/...` 는 이 환경에 없다).
 이 저장소는 그 사본과 점검 기록을 보관한다.
 
 | 파일 | 무엇 |

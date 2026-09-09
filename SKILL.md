@@ -564,7 +564,8 @@ for i, row in enumerate(data, start=2):
 try:
     wb.save(XLSX); saved = XLSX
 except Exception as e:
-    saved = os.path.expanduser('~/skillwork/배민_저점수리뷰_backup.xlsx')
+    saved = os.path.expanduser('~/mnt/claude/backup/배민_저점수리뷰_backup.xlsx')
+    os.makedirs(os.path.dirname(saved), exist_ok=True)
     wb.save(saved)
     print(f'[WARN] 원본 저장 실패 ({e}) → {saved}', file=sys.stderr)
 
