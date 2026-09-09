@@ -23,7 +23,7 @@ URL: `https://self.baemin.com/shops/<shopId>/reviews`
 ## 설계 근거 (건드리기 전에 읽을 것)
 
 - **API를 쓰지 않는 이유**: `self-api.baemin.com`은 페이지와 다른 오리진이라, 브라우저 확장이 주입한 스크립트에서는 인증이 필요 없는 `/v2/maintenance`조차 전부 `Failed to fetch`로 차단된다(2026-09-05 실측, XHR·iframe 네이티브 fetch 모두 동일). 서버 503이나 인증 만료가 아니라 크로스 오리진 차단이므로 헤더를 맞춰도 뚫리지 않는다. DOM 수집이 유일한 경로다. (쿠팡이츠는 API가 same-origin이라 되는 것이고, 같은 방법을 배민에 적용할 수 없다.)
-- **스크린샷으로 탭을 "깨우지" 않는 이유**: 이 환경에서 탭은 `document.hidden === false`이고 rAF 스로틀링이 없다. 순수 JS 스크롤만으로 라운드당 약 250ms가 나온다(실측: 205건을 약 50초, 도구 호출 2회). 스크린샷 깨우기·browser_batch 사이클은 불필요한 왕복이므로 쓰지 않는다. 단 Step 4에서 `hidden === true`가 확인되면 그때만 예외적으로 스크린샷을 끼워 넣는다.
+- **탭이 `document.hidden === true`로 시작할 수 있다 — 스크린샷·wait로는 못 푼다**: `tabs_context_mcp(createIfEmpty=true)`로 만든 새 창은 다른 창(보통 Claude 앱)에 가려져 `hidden: true`로 시작하는 것이 기본값에 가깝다(2026-09-09 실측, 새 탭 2회 모두). 그 상태에서는 두 가지가 동시에 일어난다. (1) **감속** — 백그라운드 탭 타이머 클램프로 `setTimeout(250)`이 약 1000ms에 깨어난다(실측 741/994/1007/994/1003ms, 라운드당 약 4배). (2) **정지** — `requestAnimationFrame`이 2초 안에 한 번도 오지 않아 무한스크롤 로더가 돌지 않고, 리스트가 더 로드되지 않는다(실측: 12라운드·20초·gained 0, scrollHeight 4362 고정). 이 상태를 모르고 진행하면 190건 중 6건에서 멈춘다. `computer(screenshot)`·`computer(wait)`는 둘 다 `hidden`을 `false`로 바꾸지 못하고 프레임 1장만 강제한다(실측: 직후에도 hidden true, 타이머 ~1000ms). **유일한 해제 방법은 사용자가 크롬 창을 화면 앞으로 꺼내는 것**이며, 그 직후 라운드당 257ms로 돌아온다(실측 251~261ms). 그래서 Step 2가 `hidden`을 게이트로 쓰고, `_scroll`이 감속을 스스로 감지해 조기 반환한다. 가시 상태에서는 순수 JS 스크롤만으로 라운드당 약 257ms가 나온다(2026-09-09 실측: 190건을 약 50초, `_scroll` 호출 2회 + 종료 확인 1회; 96건은 약 23초, 호출 1~2회). 스크린샷 깨우기·browser_batch 사이클은 쓰지 않는다.
 - **`javascript_tool` 호출은 45초에서 CDP 타임아웃**이 난다. 배치 예산은 25초를 넘기지 않는다.
 - **엑셀은 사용자 PC에서 직접 처리**한다(`device_bash`). 클라우드 컨테이너엔 `/sessions` 경로 자체가 없으므로 `find /sessions/*/mnt/...` 같은 탐색을 되살리지 말 것. 스테이징·전송·커밋 왕복도 필요 없다.
 
@@ -43,12 +43,17 @@ URL: `https://self.baemin.com/shops/<shopId>/reviews`
 
 ## Step 0: 환경 확인
 
-`device_bash`로 폴더·파이썬·잠금파일을 한 번에 확인한다.
+`device_bash`로 폴더·파이썬·잠금파일을 확인한다. 세 검사는 **각각 따로** 출력한다 — 예전의 `A && B && C && echo LOCKED || echo UNLOCKED` 한 줄은 폴더나 openpyxl이 없어도 마지막 `|| echo UNLOCKED`가 찍혀 환경 실패가 통과로 보였다(2026-09-09 재현). 되돌리지 말 것.
 
 ```bash
-ls -d $HOME/mnt/claude && python3 -c "import openpyxl;print('openpyxl ok')" && ls $HOME/mnt/claude/'~$배민_저점수리뷰.xlsx' 2>/dev/null && echo LOCKED || echo UNLOCKED
+[ -d "$HOME/mnt/claude" ] && echo FOLDER_OK || echo NO_FOLDER
+python3 -c "import openpyxl" 2>/dev/null && echo OPENPYXL_OK || echo NO_OPENPYXL
+[ -e "$HOME/mnt/claude/~\$배민_저점수리뷰.xlsx" ] && echo LOCKED || echo UNLOCKED
 ```
 
+- 세 줄이 `FOLDER_OK` · `OPENPYXL_OK` · `UNLOCKED` 이어야 정상이다. 하나라도 빠지면 아래를 따른다.
+- `NO_FOLDER` → 폴더가 연결되지 않은 것. 사용자에게 `claude` 폴더 연결을 요청한다. 수집은 진행하되 Step 5는 실행하지 않는다.
+- `NO_OPENPYXL` → 사용자 PC에 openpyxl이 없다. `pip install openpyxl`을 시도하고 실패하면 Step 5를 건너뛴다.
 - `LOCKED` → 사용자에게 엑셀을 닫아달라고 요청하고 재확인한다.
 - `device_bash` 자체가 실패하면 → 사용자에게 "PC에 연결되어 있지 않아 엑셀 저장을 할 수 없다"고 알리고, 수집은 진행하되 결과를 채팅에 표로만 출력한다.
 
@@ -118,7 +123,10 @@ JSON.stringify({ dismiss: _d, shopIdOk: location.href.includes('<SHOP_ID>'),
    "total":0,"dist":[0,0,0,0,0],"reviews":[]}
   ```
 - `gone === false` → `[WARN] 팝업이 계속 재등장함`만 남기고 계속 진행한다.
-- `hidden === true` → 이 값을 기억해 둔다. Step 4의 스크롤이 정체될 때만 쓴다.
+- `hidden === true` → **Step 3으로 가지 않는다.** 크롬 창이 가려져 있어 타이머가 1초로 늘고 리스트가 로드되지 않는다(설계 근거 참고). 스크린샷·wait로는 풀리지 않으므로 사용자에게 아래 문구로 요청하고 **응답을 기다린다**:
+  > ⚠️ 크롬 창이 다른 창에 가려져 있어(document.hidden) 리뷰 목록이 로드되지 않습니다. 크롬 창을 화면 앞으로 꺼내 주시고(최소화 해제, Claude 앱에 가려지지 않게) '꺼냈어요'라고 알려주세요.
+
+  응답 후 `JSON.stringify({hidden: document.hidden})`으로 `false`를 확인하고 나서 Step 3으로 간다. 여전히 `true`면 같은 요청을 한 번 더 한다(최대 2회). 2회 후에도 `true`면 이 매장은 `ok: false`, `reason: "탭 숨김 — 크롬 창이 가려져 수집 불가"`로 결과 배열에 넣고 다음 매장으로 간다. 수집 도중 창이 다시 가려지는 경우는 Step 4-2의 `throttled` 신호가 잡는다.
 
 > 헤더 계정명(예: "한종원님")은 두 계정이 같을 수 있으므로 **절대 계정명으로 로그인 여부를 판단하지 않는다.** URL의 shopId와 본문의 매장명으로만 확인한다.
 
@@ -196,29 +204,35 @@ JSON.stringify(await window._applyPeriod('최근 30일'))
 
 ## Step 4: 스크롤 수집 (매장마다)
 
-배민 리뷰 목록은 virtual scroll이라 DOM에는 화면에 보이는 약 6개만 유지된다. 지속적으로 스크롤하며 그때그때 긁어모은다.
+배민 리뷰 목록은 무한스크롤 + 윈도잉이라 DOM에는 화면 주변 카드만 유지된다(2026-09-09 실측: 최상단 6개, 스크롤 중 최대 15개). 지속적으로 스크롤하며 그때그때 긁어모은다.
 
 ### 4-1. 파서 + 스크롤 함수 정의 (1회 호출)
 
 ```javascript
-window._all = {}; window._warn = [];
+window._all = {}; window._warn = []; window._blocked = {};
 window._parse = function() {
   const DT = ['가게배달','한집배달','알뜰배달','배달','포장','직접배달','배민배달','가게포장'];
   const PK = ['사장님께만 보이는','파트너님에게만','파트너에게만','비공개 리뷰','점주에게만'];
   for (const s of document.querySelectorAll('span')) {
     const t = s.innerText?.trim(); if (!t) continue;
     const m = t.match(/^리뷰번호\s+(\d+)$/) || t.match(/^(20\d{14})$/);
-    if (!m || window._all[m[1]]) continue;
+    if (!m || window._all[m[1]] || window._blocked[m[1]]) continue;
     const no = m[1];
-    // 카드 경계는 이 클래스가 정상·특수 리뷰 모두에서 단일 리뷰만 정확히 감싼다(실측 182/182).
+    // 카드 경계는 이 클래스가 정상·특수 리뷰 모두에서 단일 리뷰만 정확히 감싼다(실측 2026-09-09: 381/381, no_card·merged 경고 0).
     // 부모로 walk-up하는 예전 방식은 이웃 리뷰까지 병합해 데이터를 섞어버렸다 — 되살리지 말 것.
     const card = s.closest('[class*="ReviewContent-module"]');
     if (!card) { window._warn.push('no_card:' + no); continue; }
-    if (card.innerText?.includes('게시중단 요청으로 인해')) continue;   // 우리가 신고해 내린 리뷰 — 수집 제외
+    // 우리가 신고해 내린 리뷰 — 수집 제외. 단 건수는 센다: 페이지의 전체(N)에는 포함되므로
+    // collected + blocked === expectedTotal 로 수집 완료를 검증할 수 있다(2026-09-09 실측: 189 + 1 = 190).
+    if (card.innerText?.includes('게시중단 요청으로 인해')) { window._blocked[no] = 1; continue; }
     if ((card.innerText.match(/리뷰번호/g) || []).length > 1) { window._warn.push('merged:' + no); continue; }
 
     const text = card.innerText || '';
-    // 별점: aria-label이 가장 정확하다(실측 100%). SVG 색상 세기는 44같은 이상값을 만든 전력이 있어 fallback으로만 쓴다.
+    // 별점 읽기 순서: aria-label → data-* → SVG 색상 → img alt.
+    // 2026-09-09 실측: 카드 안에 aria-label 요소가 0개라 381/381건 전부 SVG 색상 경로로 읽혔다. 즉 **현재 사이트에서 실제 경로는 색상 fallback**이다.
+    // aria-label 경로는 사이트가 되돌아올 때를 대비해 남긴다 — 지우지 말 것.
+    // 색상 경로 신뢰도: 381건 중 범위 밖 값(44 같은 이상값)·파싱 실패 0건, 분포 0/0/0/7/374, 4점 카드 본문 대조 일치. 카드 안 svg는 별 5개(16px, #FFC600 또는 회색)와
+    // 12px 아이콘 1개(검정)뿐이라 오탐 여지가 없었다. 44 이상값은 카드 병합 시절의 산물이며 `c <= 5` 가드가 막는다. 현재로서는 신뢰할 수 있다고 본다.
     let stars = -1;
     for (const svg of card.querySelectorAll('svg')) {
       const a = svg.getAttribute('aria-label') || svg.closest('[aria-label]')?.getAttribute('aria-label') || '';
@@ -301,15 +315,24 @@ window._parse = function() {
 window._lost = () => /login|signin|auth/i.test(location.href)
   || document.body.innerText.includes('등록된 가게가 없');
 window._scroll = async function(budgetMs = 25000, target = null) {
-  const t0 = performance.now(); let rounds = 0, stuck = 0, authExpired = false;
+  const t0 = performance.now(); let rounds = 0, stuck = 0, authExpired = false, throttled = false;
   const before = Object.keys(window._all).length;
+  const roundMs = [];
   while (performance.now() - t0 < budgetMs) {
     if (window._lost()) { authExpired = true; break; }   // 즉시 중단. 재시도해도 소용없다
     rounds++;
+    const rt = performance.now();
     const b = Object.keys(window._all).length;
     window.scrollBy(0, 900);
     await new Promise(r => setTimeout(r, 250));
     const a = window._parse();
+    roundMs.push(Math.round(performance.now() - rt));
+    // 감속 자가 감지. 정상 라운드 = 250ms 대기 + 파싱 ≈ 251~267ms(2026-09-09 실측 평균 257).
+    // 크롬 창이 가려지면 백그라운드 타이머 클램프로 라운드가 ~1000ms가 되고 렌더링이 멈춰 gained도 0이 된다.
+    // 임계 600ms = 정상 최대(267)의 2배 이상이면서 클램프 값(1000)의 60% — 어느 쪽과도 넉넉히 떨어져 있다.
+    // 3라운드 연속을 요구하는 이유: 첫 라운드는 콜드 스타트로 480~741ms까지 관측됐고, 단발 지연을 감속으로 오판하면 안 된다.
+    // 감속이면 예산을 다 쓰지 않고 즉시 반환한다(실측: 5.5초에 반환, 예전에는 20초를 gained 0으로 소진). 호출부가 사용자에게 창을 꺼내달라고 요청한다.
+    if (roundMs.length >= 3 && roundMs.slice(-3).every(ms => ms > 600)) { throttled = true; break; }
     if (target && a >= target) break;
     if (a === b) {
       if (++stuck >= 3) {   // wiggle: 위로 살짝 올렸다 크게 내려 lazy-load 재유도
@@ -321,9 +344,11 @@ window._scroll = async function(budgetMs = 25000, target = null) {
     } else stuck = 0;
   }
   const after = Object.keys(window._all).length;
-  return { collected: after, gained: after - before, rounds,
+  return { collected: after, gained: after - before, blocked: Object.keys(window._blocked).length, rounds,
+    throttled, hidden: document.hidden,
+    avgRoundMs: roundMs.length ? Math.round(roundMs.reduce((s, x) => s + x, 0) / roundMs.length) : null, lastRoundsMs: roundMs.slice(-3),
     authExpired, isLogin: /login|signin|auth/i.test(location.href),
-    elapsedMs: Math.round(performance.now() - t0), scrollY: Math.round(scrollY), hidden: document.hidden };
+    elapsedMs: Math.round(performance.now() - t0), scrollY: Math.round(scrollY) };
 };
 window.scrollTo(0, 0);
 'ready:' + window._parse()
@@ -337,13 +362,18 @@ JSON.stringify(await window._scroll(25000, <expectedTotal 또는 null>))
 
 이 한 줄을 **`collected`가 `expectedTotal`에 도달하거나 `gained === 0`이 연속 2회 나올 때까지** 반복 호출한다.
 
-- 실측 기준: 205건이 약 50초(호출 2회). 이 범위를 크게 벗어나면 사이트 지연을 의심한다.
-- `gained === 0`이 **연속 2회** 나오면 종료한다. 1회로 종료하지 말 것 — 느린 로딩에서 한 배치를 통째로 헛돌 수 있다.
+- 실측 기준(2026-09-09): 190건이 약 50초(호출 2회, 라운드당 257ms) + 종료 확인 1회, 96건은 약 23초(호출 1~2회). 이 범위를 크게 벗어나면 먼저 `throttled`·`avgRoundMs`를 본다.
+- **`throttled === true`가 나오면 즉시 멈추고 사용자에게 요청한다.** 크롬 창이 수집 도중 가려진 것이다(라운드 3회 연속 600ms 초과, 실측 998/1001/1001ms). 스크린샷·wait로는 풀리지 않는다. Step 2와 같은 문구로 요청한다:
+  > ⚠️ 크롬 창이 다른 창에 가려져 있어(document.hidden) 리뷰 목록이 로드되지 않습니다. 크롬 창을 화면 앞으로 꺼내 주시고(최소화 해제, Claude 앱에 가려지지 않게) '꺼냈어요'라고 알려주세요.
+
+  응답 후 같은 `_scroll` 호출을 이어서 한다 — `window._all`은 유지되므로 처음부터 다시 할 필요 없다(실측: 창을 꺼낸 직후 호출에서 257ms/라운드·+54건으로 복구). `throttled` 반환은 8회 호출 상한에 세지 않는다.
+- `gained === 0`이 **연속 2회** 나오면 종료한다. 1회로 종료하지 말 것 — 느린 로딩에서 한 배치를 통째로 헛돌 수 있다. 단 `throttled === true`인 `gained === 0`은 종료 근거가 아니다.
+- `blocked`는 건너뛴 게시중단 리뷰 수다. `collected + blocked`가 `expectedTotal`과 같으면 수집이 완전한 것이다(실측: 189 + 1 = 190). 이 값은 4-3에서 `countMatch`로 보고에만 올린다 — `ok` 판정에는 넣지 않는다(판정 변경은 다음 회차에 따로 결정).
 - **`authExpired === true`가 나오면 즉시 중단한다.** 수집 도중 세션이 끊긴 것이므로 재시도해도 소용없다. 그 매장은 `ok: false`이고, 부분 수집분으로 엑셀을 동기화하면 안 된다. 사용자에게:
   > ⚠️ [매장명] 수집 도중 로그인이 풀렸습니다. 크롬에서 다시 로그인한 뒤 '완료했어요'라고 알려주시면 해당 매장만 다시 수집합니다.
 - 수집률은 Step 4-3의 `ok` 판정에서 한 번에 따진다. `collected`가 `expectedTotal`의 98% 이상이면 정상으로 본다(차단·비노출 리뷰가 전체(N)에 포함될 수 있다). 98% 미만이면 `ok: false`이며, **로그에만 남기지 않고 최종 보고 표의 `상태` 열에 올린다.**
 - 최대 8회까지만 호출한다. 그 이상은 무한 루프로 본다.
-- **`hidden === true`가 반환될 때만** — 이 환경에서는 정상이면 나오지 않는다 — 다음 호출 직전에 `computer(action="screenshot", tabId=<탭ID>)`를 한 번 끼워 넣어 렌더링을 재개시킨다. `hidden === false`이면 스크린샷을 찍지 않는다.
+- `hidden === true`인데 `throttled === false`인 반환은 라운드 3회를 못 채우고 예산이 끝난 경우뿐이다. 다음 호출에서 `throttled`가 뜬다. **스크린샷·wait로 "깨우기"를 시도하지 않는다** — 2026-09-09 실측에서 둘 다 `hidden`을 풀지 못했고 프레임 1장만 강제해 카드 몇 개가 더 붙을 뿐이다(그래서 이전 세션에서 "computer 호출 직후만 진행"으로 보였다).
 
 ### 4-3. 저점수 추출
 
@@ -365,8 +395,11 @@ else if (ET === null)                                 { ok = false; reason = '�
 else if (ET > 0 && all.length < ET * 0.98)            { ok = false; reason = `수집률 낮음 ${all.length}/${ET}`; }
 else if (all.length > 0 && parseFail === all.length)  { ok = false; reason = '별점 필드 확인 필요 — 전건 파싱 실패'; }
 
+// blocked·countMatch는 보고용이다. ok 판정에는 넣지 않는다(2026-09-09 결정 — 판정 변경은 다음 회차에 따로).
+const blocked = Object.keys(window._blocked).length;
 JSON.stringify({ storeName: '<매장명>', ok, reason,
   expectedTotal: ET, collected: all.length, total: all.length, authExpired: AUTH,
+  blocked, countMatch: ET === null ? null : (all.length + blocked === ET),
   dist: [1,2,3,4,5].map(n => all.filter(r => r.stars === n).length),
   parseFail, warns: window._warn.slice(0, 8), reviews: out })
 ```
@@ -377,10 +410,11 @@ JSON.stringify({ storeName: '<매장명>', ok, reason,
 - `ok === false` → **확인 필요.** 사용자에게 `reason`을 그대로 알리고 나머지 매장은 계속 진행한다. 이 매장은 저장 스크립트가 건너뛰므로 기존 엑셀 행이 지워지지 않는다. 수집된 저점수는 화면 보고에는 그대로 나열한다 — 엑셀에 안 들어갈 뿐 사용자가 못 보면 안 된다.
 - `expectedTotal === 0`이고 `collected === 0` → `ok: true`. 그 기간에 리뷰가 정말 없는 것이다.
 - `parseFail > 0`인데 `ok === true` → 일부 리뷰만 별점을 못 읽은 것이다. 진행하되 건수를 최종 보고에 올린다. 그 리뷰는 `[별점확인필요]`가 붙어 엑셀에 남는다.
+- `countMatch === false`(수집 + 게시중단 ≠ 전체) → `ok`에는 영향 없다. 최종 보고 표의 `게시중단` 열에 건수를 적고, 차이가 남으면 `상태` 열에 `(전체와 N건 차이)`를 덧붙인다. 배민 "차단" 탭의 숫자와 대조하면 원인이 갈린다(실측: `차단(1)` = blocked 1).
 
 수집 단계에서는 모든 별점을 모으고 **여기서만** 저점수로 거른다. 수집 단계에서 미리 별점으로 걸러내면 페이지의 "전체(N)"과 비교해 스크롤 종료를 판단할 근거가 사라져, 하단의 저점수 리뷰를 놓칠 수 있다. 별점 파싱에 실패한 건도 저점수일 가능성을 배제할 수 없으므로 함께 보존한다.
 
-저점수는 매우 희소해서(김치찜 최근 6개월 기준 1점 1건·2점 1건·3점 4건) 이 JSON은 보통 아주 짧다. 반환값을 그대로 쓰면 되고 Blob·탭 이동은 필요 없다.
+저점수는 매우 희소해서(김치찜 최근 6개월 기준 1점 1건·2점 1건·3점 4건 — 2026-09-09 재확인; 같은 날 최근 30일은 3매장 모두 0건) 이 JSON은 보통 아주 짧다. 반환값을 그대로 쓰면 되고 Blob·탭 이동은 필요 없다.
 
 만약 반환값이 잘린 것으로 보이면(끝이 잘린 JSON) 그때만 폴백한다:
 ```javascript
@@ -560,16 +594,16 @@ tabs_close_mcp(tabId=<탭ID>)
 ```
 조회 기간: YYYY-MM-DD ~ YYYY-MM-DD (최근 30일)
 
-| 매장 | 전체(N) | 수집 | 저점수 | 신규 | 별점분포(1~5) | 상태 |
-|---|---|---|---|---|---|---|
-| 김치찜의 정석 | 205건 | 205건 | 6건 | 1건 | 1/1/4/23/176 | 정상 |
-| 퍽퍽살이 싫어 내가 만든 곱도리 | ... | | | | | ⚠️ 확인필요: <reason> |
+| 매장 | 전체(N) | 수집 | 게시중단 | 저점수 | 신규 | 별점분포(1~5) | 상태 |
+|---|---|---|---|---|---|---|---|
+| 김치찜의 정석 | 190건 | 189건 | 1건 | 0건 | 0건 | 0/0/0/1/188 | 정상 (189+1=190) |
+| 퍽퍽살이 싫어 내가 만든 곱도리 | ... | | | | | | ⚠️ 확인필요: <reason> |
 | 참 제육 | ... |
 
 엑셀: 신규 N건 추가, N건 삭제, 총 N행
 ```
 
-- `전체(N)` 열은 `expectedTotal`을, `수집` 열은 `collected`를 그대로 쓴다. **둘을 합쳐 쓰지 않는다** — 두 값이 벌어지는 것 자체가 신호다. `expectedTotal`이 `null`이면 `확인필요`라고 적는다.
+- `전체(N)` 열은 `expectedTotal`을, `수집` 열은 `collected`를, `게시중단` 열은 `blocked`를 그대로 쓴다. **셋을 합쳐 쓰지 않는다** — 값이 벌어지는 것 자체가 신호다. `countMatch === true`면 상태 열에 `(수집+게시중단=전체)`처럼 합이 맞음을 적고, `false`면 `(전체와 N건 차이)`를 적는다. `expectedTotal`이 `null`이면 `확인필요`라고 적는다.
 - `ok === false`인 매장은 상태 열에 `⚠️ 확인필요: <reason>`을 쓰고, **그 매장은 엑셀에 반영되지 않았음을 한 줄로 덧붙인다**("기존 행은 그대로 두었습니다"). 수집률 낮음도 여기 올라온다 — 로그에만 남기지 않는다.
 - `parseFail > 0`이면 표 아래에 `별점을 읽지 못한 리뷰 N건 — [별점확인필요] 표시로 저장됨`을 덧붙인다.
 - `authExpired`가 있으면 재로그인 안내를 맨 위에 올린다.
@@ -583,13 +617,15 @@ tabs_close_mcp(tabId=<탭ID>)
 |---|---|---|
 | 리뷰가 있는데 1건만 수집하고 끝남 | `전체(1,460)`처럼 쉼표가 든 숫자를 `\d+`로 읽어 1로 오인 | Step 3의 정규식은 `([\d,]+)` + 쉼표 제거. 절대 되돌리지 말 것 |
 | 리뷰가 있는데 스크롤 없이 종료 | "전체(N)" 표기 변경으로 파싱 실패 | `expectedTotal`을 0이 아닌 `null`로 두고 무진전 감지로만 종료 |
-| 별점이 44 같은 이상값 | SVG 색상 세기 fallback 오탐 | `aria-label` 우선 경로가 실패한 경우다. 카드 구조를 다시 확인할 것 |
+| 별점이 44 같은 이상값 | SVG 색상 세기 fallback이 병합 카드나 새 노란 아이콘을 세었다 | 현재 사이트에는 `aria-label`이 없어 **색상 경로가 실제 주 경로**다(2026-09-09 실측 381/381). 이상값은 `c <= 5` 가드로 버려져 `star_fail`로 잡힌다. `merged` 경고와 카드 안 svg 목록(별 5개 16px + 아이콘 12px)을 확인할 것. aria-label 경로는 사이트가 되돌아올 때 대비용이므로 지우지 말 것 |
 | 리뷰번호는 맞는데 내용이 뒤섞임 | 카드 경계 오탐 | `ReviewContent-module` 경계 실패 → `no_card`/`merged` 경고 확인 |
 | 필터 클릭이 먹힐지 않음 | 프로모션 팝업이 클릭을 가로채 | `_dismissAll()`이 선행되는지 확인 |
 | 팝업 WARN이 뜨는데 실제 팝업은 없음 | 우측 하단 챗봇 위젯을 팝업으로 오탐 | `isChatbot` 제외가 살아있는지 확인 |
 | `Failed to fetch (self-api.baemin.com)` | 크로스 오리진 차단 (정상) | API 경로를 되살리려 하지 말 것. 위 "설계 근거" 참고 |
 | CDP 타임아웃 45초 | 배치 예산이 45초에 근접 | `_scroll` 예산을 25초 이하로 유지 |
-| 스크롤이 정체되고 `hidden: true` | 탭이 백그라운드라 rAF 스로틀링 | 그때만 호출 사이에 스크린샷 1회 |
+| 라운드가 ~1000ms로 느려짐 (`throttled: true`, `avgRoundMs` ≈ 870~1000) | **감속** — 크롬 창이 가려져(`hidden: true`) 백그라운드 타이머 클램프로 `setTimeout(250)`이 1초에 깨어남(2026-09-09 실측 998/1001/1001ms) | 스크린샷·wait로는 안 풀린다. 사용자에게 크롬 창을 앞으로 꺼내달라고 요청하고 응답 후 `hidden === false` 확인, 같은 `_scroll`을 이어서 호출 |
+| 스크롤해도 `gained: 0`, scrollHeight가 안 늘어남, `hidden: true` | **정지** — 같은 원인으로 렌더링이 멈춰 rAF가 오지 않고(실측 2초 내 0회) 무한스크롤 로더가 돌지 않음. `computer` 호출은 프레임 1장만 강제해 카드 몇 개가 붙을 뿐 | 위와 같음. `gained: 0`을 "끝"으로 오판하지 말 것 — `throttled`가 함께 true면 종료 근거가 아니다 |
+| Step 2에서 `hidden: true` | 새 창이 다른 창(보통 Claude 앱)에 가려진 채 열림 — 기본값에 가깝다 | Step 3으로 가지 말고 창을 꺼내달라고 요청, `hidden === false` 확인 후 진행 |
 | 저장은 됐는데 파일이 계속 커짐 | 빈 행 누적 | `delete_rows`를 쓰는지 확인 (셀 None 비우기 금지) |
 | "등록된 가게가 없어요" | 계정 불일치 | 해당 매장 계정으로 로그인 후 재시도 |
 | 한 매장의 저점수가 통째로 사라짐 | 실패를 모르고 빈 `reviews`로 동기화함 | `ok` 플래그가 살아 있는지 확인. 저장 스크립트의 `ok_stores` 필터를 제거하지 말 것 |
@@ -597,4 +633,5 @@ tabs_close_mcp(tabId=<탭ID>)
 | `기간 필터 미확인` (ok:false) | 다이얼로그 구조 변경으로 필터 적용 실패 | 조회 범위를 모르는 채 동기화하면 안 된다. 필터를 고친 뒤 재실행 |
 | `인증만료 — 수집 도중 세션 종료` | 스크롤 중 세션 만료 | 그 매장은 실패 처리되어 엑셀이 보존된다. 재로그인 후 그 매장만 재수집 |
 | `수집률 낮음 N/M` | 스크롤이 끝까지 못 감 | 재실행. 반복되면 무진전 종료가 이른지, 게시중단 리뷰가 많은지 확인 |
-| 게시중단된 리뷰가 결과에 안 보임 | 의도적 제외 (우리가 신고해 내린 리뷰) | 정상. 배민 "차단" 탭에서 직접 확인 |
+| 게시중단된 리뷰가 결과에 안 보임 | 의도적 제외 (우리가 신고해 내린 리뷰) | 정상. `blocked` 건수로 보고되며 배민 "차단" 탭 숫자와 같아야 한다(실측 2026-09-09: blocked 1 = `차단(1)`) |
+| `countMatch: false` (수집 + 게시중단 ≠ 전체) | 스크롤 누락, 또는 전체(N)에 포함되는 다른 비노출 리뷰 | `ok`와 무관. 보고 표에 차이를 적고 "차단" 탭과 대조. 반복되면 다음 회차에서 `ok` 판정 편입 여부 결정 |
