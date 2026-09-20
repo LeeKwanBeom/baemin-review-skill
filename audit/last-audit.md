@@ -1,5 +1,344 @@
 # 점검 기준선
 
+점검일: 2026-09-20 (2회차 — 진단만. 수정은 사용자가 항목을 고른 뒤 별도 회차)
+결함 7건 / 개선안(정확성) 5건 / 속도 개선안 5건 / 인용불가·미입증으로 제외 1건
+직전 기준선 대비: 해결 4건(결함 1·2·3·4 — 저장소·설치본에 수정 원문 실재) + 개선안 ①② 완료 재확인, 미해결(이월) 3건(개선안 ③④⑤), 근거없음 0건, 신규 결함 7건(결함 1은 이월 개선안 ③의 승격, 결함 5는 속도 후보 S1의 문서-코드 불일치 부분)
+점검 대상: 저장소 `SKILL.md` **637행(`wc -l` 기준; 마지막 줄에 개행이 없어 실제 줄 수는 638. 아래 행 번호는 실제 줄 번호 = Read 도구 번호)**, md5 `5af791ce7f405dc8e3c626a2940d6b0b` — 설치본(`/root/.claude/skills/synced/<uuid>_<uuid>/baemin-review/SKILL.md`)·사용자 폴더 `baemin-review.skill`(9/9 09:30) 안 SKILL.md 와 **셋 모두 동일** /
+          실제 실행: 3매장 전부 Step 0~4-3(Step 5 미실행), 이어서 참 제육(계정B)·김치찜·곱도리(계정A 재로그인)에서 관찰·A/B 실험 /
+          엑셀 백업: `$HOME/mnt/claude/backup/배민_백업_20260920_1132.xlsx` (원본 md5 `6dae739a…`, 헤더 1행·데이터 0행, 점검 후에도 불변) /
+          브라우저: Claude in Chrome(크롬 확장)만 사용. 계정 A→B→A 전환·로그아웃·창 꺼내기는 사용자가 수행. 점검 모델: Claude Fable 5.1(Cowork 클라우드)
+1차 커밋(진단): `audit/last-audit.md` 만. `SKILL.md`·`checklist.md` 는 손대지 않았다. 사용자 폴더에 사본 `baemin-review_last-audit_2026-09-20.md` 도 내려놓았다.
+
+> 이번 회차의 두 목표(사용자 지시): ① 정확성 — 빠뜨리거나 잘못 읽는 리뷰 0건인지, ② 속도 — 같은 결과를 더 짧은 시간·더 적은 도구 호출로. 우선순위는 점검표 안전 규칙 > 이번 지시의 범위 > 정확성 > 속도. 속도 개선안은 "결과 집합이 현재 코드와 동일"이라는 실측이 있는 것만 올렸다.
+
+## 시작 전 확인 결과
+
+- 토큰: 지시문의 `push 토큰: (여기에 붙여넣기)` 자리가 비어 있어 첫 응답에서 요청 → 사용자가 이어서 제공. **작업이 끝나면 폐기할 것**(대화에 남음). 파일·remote 어디에도 남기지 않았다.
+- 정본 대조: 저장소 = 설치본 = 사용자 폴더 `.skill` 내 SKILL.md, md5 `5af791ce…`, 637행(wc -l)/48,012 bytes. 직전 기준선의 "다음 점검에서 대조할 것 — 설치본 md5가 저장소와 같은지" → **같다. 재패키징·재업로드가 완료된 상태**(직전 기준선 12행의 "설치본은 진단 시점 버전(`499afc07…`)"은 이제 옛 기록).
+- 엑셀 백업: 위 경로. Step 0 세 검사 `FOLDER_OK` / `OPENPYXL_OK` / `UNLOCKED` (PC git 2.34.1).
+- 기준선: `audit/last-audit.md` 있음(2026-09-09 회차 + 정정·교차정정). 쿠팡 저장소(`coupang-review-skill`, `audit/last-audit.md` 383행, SKILL.md 495행 md5 `abeb17eb…`)도 clone 해 P7 대조에 썼다.
+- 사용자 폴더 CLAUDE.md 의 baemin-review v2~v25 이력은 2026-09-06 전면 개정 이전 구조라 판정 근거로 쓰지 않았다(지시대로 "왜 그때 그랬는가" 참고만 — v7·v10의 "폴링마다 파서 호출로 느려졌다"는 S2 설계에 반영: 폴링은 싼 값만 보고 `_parse` 는 라운드당 1회).
+
+## 직전 기준선 판정
+
+| 항목 | 판정 | 근거(지금 원문·실측) |
+|---|---|---|
+| 결함 1 (hidden 전제·스크린샷 깨우기) | **해결됨** | 26행 `**탭이 \`document.hidden === true\`로 시작할 수 있다 — 스크린샷·wait로는 못 푼다**` / 126행 `\`hidden === true\` → **Step 3으로 가지 않는다.**` / 335행 `if (roundMs.length >= 3 && roundMs.slice(-3).every(ms => ms > 600)) { throttled = true; break; }` / 627~629행 감속·정지·Step 2 hidden 3행. [실측] 새 탭 `hidden: true` 로 시작, `setTimeout(250)` 1257/995/1007/996/995ms, rAF 2초 내 0회, `_scroll` 3라운드 1129/1005/990ms → **3.1초에 `throttled: true` 반환**(gained 0). 사용자가 창을 꺼낸 뒤 hidden false, 타이머 254/260/255/250/250ms, rAF 16ms |
+| 결함 2 (별점 aria-label 주석) | **해결됨** | 231~235행 `// 별점 읽기 순서: aria-label → data-* → SVG 색상 → img alt.` … `즉 **현재 사이트에서 실제 경로는 색상 fallback**이다.` / 621행 트러블슈팅 행. [실측] 3매장 349건(173+86+90) parseFail 0, 이상값 0, 분포 김치찜 0/0/0/1/172 · 곱도리 0/0/0/2/84 · 참제육 0/1/0/2/87 |
+| 결함 3 (Step 0 한 줄 판정) | **해결됨** | 49~51행 `[ -d "$HOME/mnt/claude" ] && echo FOLDER_OK \|\| echo NO_FOLDER` / `python3 -c "import openpyxl" 2>/dev/null && echo OPENPYXL_OK \|\| echo NO_OPENPYXL` / `[ -e "$HOME/mnt/claude/~\$배민_저점수리뷰.xlsx" ] && echo LOCKED \|\| echo UNLOCKED`. [실측] PC에서 세 줄 정상 출력 |
+| 결함 4 (낡은 수치) | **해결됨** | 207행 `(2026-09-09 실측: 최상단 6개, 스크롤 중 최대 15개)` / 26·365행 `190건을 약 50초` / 221행 `381/381` / 417행 `2026-09-09 재확인`. [실측] 오늘 DOM 카드 8~13(중앙값 12), 173건 productive 50.5초(2회) — 수치 여전히 유효 |
+| 개선안 ① `throttled` | **완료 재확인** | 위 결함 1 실측. 반환 시간은 3.1초(첫 라운드부터 600ms 초과) — 정정 회차 기록 "3.1~5.5초로 변한다" 와 일치. 판정 기준은 시간이 아니라 3라운드 연속 600ms 초과 |
+| 개선안 ② `blocked`·`countMatch` | **완료 재확인** | 227행 `if (card.innerText?.includes('게시중단 요청으로 인해')) { window._blocked[no] = 1; continue; }` / 402행 `countMatch: ET === null ? null : (all.length + blocked === ET)`. [실측] 김치찜 173+1=174(게시중단 2026082401079865, 9/9와 동일 건), 곱도리 86+0=86, 참제육 90+0=90 → **3/3 성립**(9/9 포함 6/6) |
+| 개선안 ③ 필터 적용 확인 | **미해결 → 결함 1로 승격** | 178행 `labelOk: document.body.innerText.includes(label),` 그대로. [실측] 적용 무효 조건을 만들어 오탐 재현(아래 결함 1·P1) |
+| 개선안 ④ (a) DT `'픽업'` (b) `titleOk` 헤더 한정 (c) 하단 배너 | **미해결(이월)** — (c)는 결함 아님 재확인 | 214행 `const DT = ['가게배달','한집배달','알뜰배달','배달','포장','직접배달','배민배달','가게포장'];` 에 `픽업` 없음 / 106행 `titleOk: document.body.innerText.includes('<매장명>'),`. [실측] 김치찜 30일 첫 줄 분포 알뜰배달 149·한집배달 21·가게배달 2·**픽업 2**(2026082801677641, 2026082702904106) — 픽업 카드 닉네임 `윤다식` 은 3차 fallback(날짜 앞줄)으로 정상 파싱, 곱도리 픽업 0. (c) 배너 `TemporaryDeliveryRegionAutoApplyFloatingBanner-module` fixed z101 (598,715)~(1308,839) @innerHeight 855: 다이얼로그 **닫힘** 상태 기간 버튼 (473,532)~(1289,596) `elementFromPoint` 본래 요소 / **열림** 상태 다이얼로그 (700,156)~(1220,699), 적용 (720,631)~(1200,679) 본래 요소, `최근 30일` 라벨 (740,306)~(919,330) 본래 요소, 기간 버튼만 다이얼로그 SPAN 이 덮음(배너 무관). 2회 연속 겹침 없음 |
+| 개선안 ⑤ 자동 백업·저장 후 재열기 | **미해결(이월)** | Step 0(44~60행)에 백업 블록 없음, Step 5 뒤 재열기 확인 없음. 쿠팡 SKILL.md 47~50행에는 동일 취지 블록이 이미 있음(P6) |
+| "다음 점검에서 대조할 것" — 쿠팡 개정안 중 배민 해당분 | **판정 완료** | 아래 P7 양방향 대조표 |
+| 〃 — 설치본 md5 | **해결됨** | 위 정본 대조 |
+| 〃 — 검증 세션이 볼 것(hidden 게이트 대기, throttled 재현, 이어서 호출, Step 0 세 줄, 게시중단 열, countMatch) | **전부 실측 통과** | 위 결함 1·3, 개선안 ①② 행 |
+| 〃 — `collected + blocked === expectedTotal` 반복 성립 → `ok` 편입 여부 | **3/3 성립. 편입 여부는 사용자 결정(개선안 ①·P2)** | 위 개선안 ② 행 |
+| 〃 — 45초 CDP 타임아웃 재현·F 실험 | **미재현·F 별도 기록(아래 실행 실측 기록 F 절)** | 이번 회차 CDP 타임아웃 0회(`_scroll` 최대 25.5초) |
+| 〃 — 곱도리 닉네임 실패 카드 구조 | **판정 완료 → 결함 4** | [실측] 첫 줄 `알뜰배달` → `내가주문한`(닉네임) → `2026년 8월 24일` → 리뷰번호 → `3회 주문 고객` → `(최근 6개월 누적 주문)` → `진짜 맛있어요👍👍👍` → 주문메뉴 `100% 한우 대창 곱도리탕 1인 단품 (밥X,반찬X)`. 닉네임에 `주문` 이 들어 268행 금지어에 걸림. 픽업·DT 와 무관 |
+| 〃 — 로그아웃 상태 URL 패턴 | **판정 완료(실측)** | 아래 P3. 두 회차 연속 [추론]이던 항목이 [실측]으로 바뀜 |
+| 〃 — `expectedTotal === null` 강제 시 흐름 | **미실측(이월)** | 이번에도 조건을 만들지 않음 — 4-3 은 394행 `else if (ET === null) { ok = false; … }` 로 코드상 명확해 우선순위 낮음 |
+
+## 결함
+
+행 번호는 638줄(실제 줄 수, Read 도구 번호) 기준. 심각도 순.
+
+| # | 심각도 | 줄 | 문제 원문(그대로) | 실측/추론 | 왜 틀렸는지 | 수정 방향 |
+|---|---|---|---|---|---|---|
+| 1 | 중 | 178, 189, 194 | 178: `labelOk: document.body.innerText.includes(label),` / 189: `- **\`filterOk\`** — 기간 필터가 실제로 적용됐는가. \`ok && (labelOk \|\| range가 실제 30일 범위)\`이면 \`true\`.` / 194: `- \`ok && labelOk\` → \`filterOk = true\`.` | [실측] 조건 재현 | **적용 클릭이 무효여도 `filterOk` 가 true 가 된다.** 조건을 만들어 확인: reload(기본 6개월, 전체 915) → 다이얼로그 열고 `최근 30일` 라디오만 클릭, **적용은 누르지 않고** 2.8초 뒤 Step 3 반환식과 같은 계산 → `labelOk: true`(열린 다이얼로그가 모든 기간 라벨을 본문에 갖고 있어서), `range: "2026. 3. 21 (토) ~ 2026. 9. 20 (일)"`(6개월 그대로), `expectedTotal: 915`. 194행 판정대로면 `filterOk = true`·ET 915 로 Step 4 진행 → 6개월치를 "최근 30일 현황" 엑셀에 동기화하게 된다(`ok: true` 이므로 저장 단계가 막지 못함). 다이얼로그를 닫으면 labelOk 는 false 로 돌아온다 → 오탐의 필요조건은 "다이얼로그가 열린 채 남음" 이며, 실제 적용 클릭이 조용히 무효가 되는 사례는 4회 실행 × 3매장에서 0건(빈도 미확인). 그러나 안전장치 자체가 그 실패를 구조적으로 못 잡는다 | (P1에서 시험한 판정) **다이얼로그 닫힘 + 기간 버튼 자신의 텍스트에서 읽은 두 날짜가 `오늘-30일 ~ 오늘` 과 일치** 로 교체. 시험 결과: 열린 상태 `pass:false`(dialogOpen true, rangeStart 2026-03-21 ≠ 2026-08-21), 닫고 미적용 `pass:false`, 정상 적용 후 `2026-08-21 ~ 2026-09-20` 일치. 코드 원문은 아래 "정확성 판정" P1 항목 |
+| 2 | 중 | 105, 109, 114~118 | 105: `JSON.stringify({ dismiss: _d, shopIdOk: location.href.includes('<SHOP_ID>'),` / 109: `url: location.href, hidden: document.hidden })` / 115: `- \`isLogin\` 또는 \`noShop\` 또는 \`titleOk === false\` → **이 매장만 중단**하고 다른 매장은 계속한다.` | [실측] 조건 재현 | **로그인이 풀린 바로 그 상황에서 Step 2 판정값이 하나도 안 보인다.** 로그아웃 상태로 매장 URL 접근 → `https://biz-member.baemin.com/login?returnUrl=https%3A%2F%2Fself.baemin.com%2Fshops%2F14697934%2Freviews&__ts=…` 로 리다이렉트. 이 페이지에서 Step 2 반환식(109행 `url: location.href` 포함)을 실행하면 브라우저 도구가 결과 전체를 **`[BLOCKED: Cookie/query string data]`** 로 바꿔 돌려준다 — `isLogin`·`shopIdOk`·`titleOk` 를 읽을 수 없다. 114~118행 판정에는 BLOCKED 결과에 대한 규칙이 없다. 덧붙여 `returnUrl` 안에 shopId 가 들어 있어 105행 `shopIdOk` 는 로그인 페이지에서도 true 가 되는 값이다(차단이 풀려도 단독 판정 근거로 부적합). 같은 이유로 이번 세션의 다른 JS 반환(`location.href` 포함)도 1회 차단됨 | 109행을 `path: location.host + location.pathname`(쿼리 제외)으로. 판정에 "결과가 `[BLOCKED:` 로 시작하면 로그인 필요로 간주하고 위 문구로 요청" 추가. `_scroll` 반환은 `isLogin` 불리언만 담아 영향 없음(실측 정상) |
+| 3 | 하~중 | 215, 282, 286~292, 300~302 | 215: `const PK = ['사장님께만 보이는','파트너님에게만','파트너에게만','비공개 리뷰','점주에게만'];` / 292: `if (pl.length) { partner = pl.slice(0, 5).join(' ').trim(); break; }` / 300: `if (pub && partner) review = \`${pub} / [파트너전용] ${partner}\`;` | [실측] 9/9건 | **"파트너님에게만 보이는 리뷰" 카드의 리뷰내용이 틀리게 저장된다(누락은 아님).** 현재 사이트에서 이 문구는 별도 비공개 구간의 머리말이 아니라 **리뷰 전체가 비공개임을 알리는 라벨 한 줄** `파트너님에게만 보이는 리뷰입니다.` 이고 그 다음 줄부터 본문이다. 코드는 (a) 282행 필터로 라벨 줄만 빼고 본문을 `pub` 으로 잡은 뒤, (b) 286~292행이 키워드 뒤 텍스트(라벨 잔여 `보이는 리뷰입니다.` + 본문)를 다시 `partner` 로 잡아 → 300행에서 **본문이 두 번** 들어간다. 실측 예 참제육 2026091002657117: `오늘도 맛있었습니다. 근데 사장님 오늘 평소보다 맵던데 맵기맛 바뀐거아니죠? / [파트너전용] 보이는 리뷰입니다. 오늘도 맛있었습니다. 근데 사장님 오늘 평소보다 맵던데 맵기맛 바뀐거아니죠?`. 3매장 파트너전용 9건(김치찜 5·곱도리 3·참제육 1) 중 **7건이 이 중복 패턴**, 나머지 2건(김치찜 2026091102615435, 2026090501582754)은 카드에 `주문메뉴` 가 없어 `pub` 이 비고(279행 `if (ms > 0 && di2 >= 0)` 불충족) `[파트너전용] 보이는 리뷰입니다. 본문…` 으로 라벨 조각이 섞이며 292행의 5줄 상한에 긴 본문이 잘릴 수 있다(2026091102615435 는 본문 2줄이라 잘리진 않음). 저점수가 이 유형이면 엑셀 리뷰내용이 위와 같이 저장된다 | 라벨 줄(`/^(파트너님|사장님|점주)[^\n]*보이는 리뷰입니다\.?$/`)은 **플래그**로만 쓰고 본문에서 제외: `partnerOnly = true` 면 `review = '[파트너전용] ' + pub`(중복 없이). 기존 "별도 비공개 구간" 구조(키워드 뒤에만 텍스트)가 다시 나타날 때를 대비해 현 `partner` 경로는 `pub` 이 빈 경우의 fallback 으로만 유지. 5줄 상한(292행)은 본문이 들어오는 경로에서는 제거 |
+| 4 | 하 | 268 | `const okNick = n => n && n.length < 30 && !n.startsWith('(') && !/주문\|리뷰번호\|배달리뷰\|답글\|사장님/.test(n) && !DT.includes(n);` | [실측] 1/349 | 닉네임에 금지어가 포함되면 3개 전략이 모두 같은 `okNick` 으로 기각돼 닉네임이 빈다. 곱도리 2026082400693614 의 닉네임은 **`내가주문한`** — `/주문/` 에 걸려 `nick_fail`(9/9·9/20 두 회차 재현, 리뷰 자체는 정상 수집·별점 5). 금지어는 메타 줄(`N회 주문 고객`, `리뷰번호 …`, `배달리뷰`, `사장님`)을 피하려는 것인데 부분 일치라 사용자 닉네임까지 막는다 | 부분 일치 금지어를 **메타 줄 정확 패턴**으로 좁힘: `/^\d+회\s*주문\s*고객$/`, `/^리뷰번호/`, `/^배달리뷰$/`, `/^사장님$/`, `/^\(최근/`. `n.length < 30`·DT 제외는 유지 |
+| 5 | 하 | 336, 363, 370~371 | 336: `if (target && a >= target) break;` / 363: `이 한 줄을 **\`collected\`가 \`expectedTotal\`에 도달하거나 \`gained === 0\`이 연속 2회 나올 때까지** 반복 호출한다.` / 371: `\`collected + blocked\`가 \`expectedTotal\`과 같으면 수집이 완전한 것이다` | [실측] | **문서-코드 불일치.** 371행이 정의한 "완전"(collected + blocked = 전체)과 336행의 종료 판정(`a` = collected 만)이 다르다. 게시중단이 1건이라도 있으면 target 에 영원히 못 닿아 배치가 예산을 끝까지 쓰고, 363·370행 문구("gained 0 연속 2회")를 지키면 무진전 배치가 **2회(50초)** 추가된다. 오늘 김치찜(전체 174 = 173 + 게시중단 1)에서 그대로 재현: 4회 호출 94R·25.0s·+95 → 83R·25.5s·+65(여기서 이미 173+1=174 완전) → **48R·25.3s·+0 → 48R·25.3s·+0**, 합 101.1초 중 50.6초가 종료 확인. 9/9 기록의 3번째 호출 `48R·25.3s·+0` 도 동일 기전이며, 그날은 문서와 달리 **무진전 1회로 끝냈다**(문서 370행과 관행의 불일치). 결과 정확성에는 영향 없음(집합 동일) | 코드 쪽은 속도 개선안 S1(target 판정 `collected + blocked`, 바닥 도달 조기 반환). 문서 쪽은 363·370행을 S1 채택 여부에 맞춰 한 문장으로 정리(무진전 종료 기준을 "바닥 도달 반환 2회" 또는 "gained 0 2회" 중 하나로 고정) |
+| 6 | 하 | 334 | `// 감속이면 예산을 다 쓰지 않고 즉시 반환한다(실측: 5.5초에 반환, 예전에는 20초를 gained 0으로 소진). 호출부가 사용자에게 창을 꺼내달라고 요청한다.` | [실측] | 상수처럼 읽히는 기록 문구. 반환 시간은 첫 라운드 콜드 스타트 유무로 변한다 — 9/9 검증 3.088초, 오늘 3.125초(1129/1005/990ms 3라운드), 9/9 수정 회차 5.5초. 정정 회차가 "다음 수정 회차에 함께 고칠 후보"로 남긴 항목 | `(실측: 3.1~5.5초에 반환 — 판정 기준은 시간이 아니라 3라운드 연속 600ms 초과)` 로 |
+| 7 | 하 | 419 | `만약 반환값이 잘린 것으로 보이면(끝이 잘린 JSON) 그때만 폴백한다:` | [실측] 3회 | `javascript_tool` 반환은 약 1,000자에서 **끝에 `[TRUNCATED]` 표식이 붙어** 잘린다(이번 세션 3회 관측: P3 샘플 JSON, 곱도리 카드 덤프, step 4500 결과). "끝이 잘린 JSON" 이라는 서술은 표식이 없는 것처럼 읽혀 다른 판정 기준(눈으로 끊김 확인)을 만든다. 쿠팡 스킬은 같은 사유로 2026-09-09 결함 2·정정 2에서 `[TRUNCATED]` 기준으로 통일했다(P7 이관 대상) | `만약 반환값 끝에 \`[TRUNCATED]\` 표식이 붙어 잘렸으면 그때만 폴백한다:` 로. 트러블슈팅 표에도 같은 표식으로 |
+
+인용불가·미입증으로 제외한 항목 1건: 4-2 375행 `최대 8회까지만 호출한다` 상한이 S2·S5 채택 후(라운드 100ms 안팎, 25초 배치에 ~250라운드) 과하게 큰 값이 되는지 — 채택 전이라 판정 보류[추론].
+
+## 개선안 (정확성, 최대 5)
+
+| # | 내용 | 이유 | 우선순위 |
+|---|---|---|---|
+| ① (P2) | `countMatch` 를 `ok` 판정에 편입: `else if (ET > 0 && all.length + blocked !== ET) { ok = false; reason = '전체와 N건 차이' }` (98% 규칙은 유지하거나 대체) | [실측] 이번 3/3 + 9/9 3/3 = **6/6 정확 일치**(174=173+1, 86, 90 / 190=189+1, 96, 96). **편입 비용:** 전체(N)에 포함되지만 렌더링되지 않는 다른 비노출 유형이 생기면 그 매장 저장이 막힌다(기존 행 보존, 저점수는 채팅에 보고되므로 데이터 유실은 없음 — 재실행 안내 1회의 비용). **편입 이득:** 지금은 98% 규칙이라 174건 중 1~3건 누락(≥171)이 `ok: true` 로 통과하는데, 편입하면 1건 누락도 잡는다. 사용자 결정 사항 | 1 |
+| ② (P6) | 실행 전 자동 백업을 Step 0 에 넣기 — 쿠팡 SKILL.md 47~50행 블록 이식: `mkdir -p $HOME/mnt/claude/backup && if [ -f "$HOME/mnt/claude/배민_저점수리뷰.xlsx" ]; then cp "$HOME/mnt/claude/배민_저점수리뷰.xlsx" "$HOME/mnt/claude/backup/배민_저점수리뷰_$(date +%Y%m%d_%H%M%S).xlsx" && echo "백업 완료: …" \|\| echo "백업 실패 — 중단하고 사용자에게 알린다"; else echo "백업 대상 없음(첫 실행)"; fi` + 454행 "실행 전에 파일을 백업해 둘 것" 문구를 자동 백업 체계로 갱신 | 이월 ⑤(a). 스냅샷 동기화라 백업이 유일한 되돌리기 수단인데 절차에 없다. 수집 방식이 아니라 절차 이식이라 금지 대상 아님 — 사용자 승인 사항 | 2 |
+| ③ | Step 5 저장 후 엑셀을 다시 열어 행수·리뷰번호 집합이 `kept + new` 와 같은지 확인하는 한 줄 | 이월 ⑤(b). 쿠팡 개선안 2(구 4)와 동일. 사본 dry-run 으로 검증 비용이 작다 | 3 |
+| ④ | `parseFail` 비율 임계: 전건 실패(396행)만 잡는 판정에 `parseFail > all.length * 0.1` 을 `ok: false` 조건으로 추가 | 점검표 C "절반이 실패해도 통과하는 게 맞는지". 오늘 3매장 parseFail 0 이라 실효는 없었다. 쿠팡 개선안 3(구 5)와 동일 취지 | 4 |
+| ⑤ | 사이트 현행화(이월 ④): (a) 214행 `DT` 에 `'픽업'` 추가 (b) 106행 `titleOk` 를 헤더 줄로 한정 | (a) [실측] 김치찜 30일에 픽업 2건. 지금은 3차 fallback 이 구하지만 1차 전략이 놓치는 유형. (b) 본문 어디에 매장명이 있어도 통과하는 약한 판정. (c) 배너는 2회 연속 겹침 없음 → **개선안에서 제외** | 5 |
+
+개수 제한(5)으로 제외한 후보 1건: `(텍스트 없음)` 리뷰(3매장 105/349건)에서 `배달리뷰` 칩(`좋아요`/`아쉬워요`)을 `[배달리뷰] 아쉬워요` 로 보존하는 것 — 현재 296행 태그 분기는 `ms <= 0`(주문메뉴 없는 카드)에서만 돌아 `주문메뉴` 가 있는 카드의 칩은 기록되지 않는다[실측 2026091802546606: 칩 `아쉬워요`, 저장 `(텍스트 없음)`]. 정보 손실이지 오독은 아니어서 후순위.
+
+## 속도 기준선 (이번 회차 신설 — 현재 설치본 코드 그대로, 실험 전에 측정)
+
+조회 기간(3매장 공통): `2026. 8. 21 (금) ~ 2026. 9. 20 (일)`. 6개월 총건수 김치찜 `전체(1,435)`(쉼표 실재)·곱도리 512·참제육 915. 시각은 페이지 `Date.now()`(ms epoch) 기준.
+
+| 매장 | expectedTotal | collected | blocked | countMatch | parseFail | `_scroll` 호출 수 | 라운드 합 | avgRoundMs | elapsedMs 합 | 벽시계 navigate→4-3 결과(초) — 사용자 대기 제외 / 포함 | 도구 호출 수(Step 2~4-3, 스킬 규정분) | 건/초 | hidden 시작값 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 김치찜의 정석 | 174 | 173 | 1 | true | 0 | 4 (94R·25.0s·+95 → 83R·25.5s·+65 → 48R·25.3s·+0 → 48R·25.3s·+0) | 273 | 257 | 101,064 (무진전 2회 50,559 포함) | **261.2** / 567.4 (사용자 대기 231.7 + 점검표 지정 숨김 계측 74.5 제외) | 8 (Step2 1·Step3 1·4-1 1·4-2 4·4-3 1) + 감사용 3 | 1.71 (스크롤 기준) · 3.43 (무진전 2회 제외) · 0.66 (벽시계 기준) | **true** (탭 생성 직후) |
+| 퍽퍽살이 싫어 내가 만든 곱도리 | 86 | 86 | 0 | true | 0 | 1 (77R·19.9s·+80, target 도달) | 77 | 258 | 19,892 | **111.6** / 128.0 (hidden 관찰 대기 16.4 제외) | 5 + 감사용 1 | 4.32 · 0.77 | **true** (Step 2 시점 — 사용자가 Claude 앱에서 답장 중) → 16초 뒤 false |
+| 참 제육 | 90 | 90 | 0 | true | 0 | 1 (82R·21.1s·+84, target 도달) | 82 | 258 | 21,140 | **110.0** / 110.0 | 5 | 4.26 · 0.82 | false |
+
+**벽시계 분해 — 시간이 어디서 새는가** (초)
+
+| 매장 | 페이지 로드 + Step 2 (navigate→Step 2 결과) | 사이트 렌더링(`_scroll` elapsed + Step 3 소요) | 도구 왕복·코드 생성(결과 수신→다음 결과 수신 − 페이지 내 소요, Step 3~4-3 구간) | 사용자 대기 |
+|---|---|---|---|---|
+| 김치찜의 정석 | 23.3 | 104.3 (101.1 + 3.2) | **133.6** (Step 3 블록 전 23.8 · 4-1 블록 전 40.8 · 4-2 4회 7.6/6.5/18.1/11.2 · 4-3 블록 전 25.7) | 231.7(창 꺼내기) |
+| 곱도리 | 14.2 | 23.1 (19.9 + 3.2) | **74.3** (20.8 · 32.8 · 6.2 · 14.6) | 16.4(hidden 재확인) |
+| 참 제육 | 13.8 | 24.3 (21.1 + 3.2) | **71.9** (20.4 · 33.1 · 6.1 · 12.3) | 0 (계정 A→B 전환 자체는 210.8, 그 안에 P3 계측 포함) |
+
+- 결론: 게시중단이 없는 매장은 **도구 왕복·코드 생성(72~74초)이 사이트 렌더링(23~24초)의 3배**다. 큰 코드 블록(4-1 약 7KB → 33~41초, Step 3 약 2.5KB → 20~24초)을 매장마다 다시 내보내는 구조가 원인이고, 이는 스크롤 최적화(S1·S2·S5)로는 줄지 않는다(→ 속도 개선안 S6). 게시중단이 있는 매장(김치찜)은 종료 확인 50.6초(S1)가 더해져 사이트 쪽이 커진다.
+- 2026-09-09 기준값 대비: 190건 약 50초·257ms/라운드·3.7건/초 → 오늘 173건 productive 50.5초·257ms·3.43건/초로 사이트 쪽은 동일 수준. `_scroll` 라운드 분포 251~271ms, 최대 271.
+- `_scroll` 1회당 도구 왕복 오버헤드(짧은 호출): 6.1~7.6초(결과만 읽고 재호출) ~ 18초(결과 해석 추가 시).
+- 매장별 리뷰번호 집합은 같은 오리진 `localStorage` 키 `_audit_A_kimchi`/`_audit_A_gopdori`/`_audit_A_cham` 에 보관해 실험 결과와 대조했다(navigate·로그아웃/로그인 뒤에도 유지됨 — 실측). 점검 종료 시 삭제.
+
+## 속도 개선안 (최대 5 — 이번 회차 신설)
+
+합격 기준(공통): 같은 매장·같은 세션·hidden false 에서 A(현재 코드) / B(후보) 각 1회, **리뷰번호 집합 동일 + countMatch true + parseFail 동일 + warns 동일 + blocked 동일**, 그리고 필드(stars·date·nickname·menu·reviewText) 전건 동일. 김치찜은 A(기준선) 뒤 새 리뷰 1건(2026092002781715, 2026-09-20, 5점)이 달려 전체(N) 174→175 가 됐다 — 모든 B 결과의 차이는 이 1건(onlyB)뿐이고 onlyA 는 0건이었다. **실험은 전부 페이지 안 `window` 함수 재정의로만 했고 저장소·설치본 SKILL.md 는 건드리지 않았다.**
+
+| # | 후보 | (a) 현재 코드 원문 | (b) 실측 | (c) 예상 절감(초/매장) | (d) 정확성 리스크 · 검증 방법 | 판정 |
+|---|---|---|---|---|---|---|
+| S1 | target 판정에 `blocked` 포함 + 바닥 도달 조기 반환 | 336: `if (target && a >= target) break;` | [실측] 김치찜 A: 4회·273R·**101.1s**(무진전 2회 50.6s) / B(`_scrollS1`, 250ms 대기 그대로): 2회·164R·**41.7s**, 173+1=175 도달 즉시 종료. 바닥 감지 경로(도달불가 target 으로 호출): 6R·wiggle 2·**3.1s** 에 `bottom:true`. 집합 동일(+신규 1), 필드 diff 0, warns·blocked·parseFail 동일 | 게시중단 ≥1 매장 **≈59** (101.1→41.7); 게시중단 0 매장 0(이미 target 종료). 무진전 확인이 필요한 경우 25s×2 → ≈3s×2 | 로더 지연 중 바닥으로 오판해 조기 반환 → 호출부의 "무진전 2회" 규칙이 재호출하므로 데이터 영향 없음(시간만). scrollHeight 미세 변동(153,506→153,471)으로 첫 wiggle 은 불충족 → `\|Δ\| < 50px` 허용 검토. 검증: 3매장 A/B(오늘 김치찜만 경로 발동) | **개선안** (결함 5의 코드 쪽) |
+| S2 | 라운드 대기 250ms 고정 → "변화 감지 시 조기 진행(+50ms 정착), 상한 250ms" 적응형. 폴링은 지문(리뷰번호 span 수·마지막 리뷰번호·scrollHeight)만 보고 `_parse` 는 라운드당 1회 유지 | 327: `await new Promise(r => setTimeout(r, 250));` | [실측] `_parse` 자체 0.2~2ms(중앙값 0.5) → 라운드 257ms 의 99%가 고정 대기. scrollBy 후 scrollHeight 변화 25~65ms(중앙값 42, 53/55R), scrollY 변화 중앙값 42ms; 카드 **수** 변화는 11/55R 뿐(윈도우 12~13 고정 — count 는 신호로 부적합). B(`_scrollB` step 900): 참제육 82R·**8.19s**(A 21.14s) avgRound 100·capHits 0·wiggle 0 / 김치찜 165R·**14.24s**(A productive 50.5s) avgRound 86·capHits 1·wiggle 0. 두 매장 모두 집합·필드·warns·blocked·parseFail 동일 | ≈ 60%: 참제육 13, 곱도리 ≈12(미실측, 비례 추정), 김치찜 36(S1 적용 후 기준) | 정착 50ms 안에 카드 본문이 다 붙지 않으면 필드 누락 가능 → 실측 0건(2매장). 숨김 상태에서는 25ms 폴이 1초로 클램프돼 라운드 ≈1000ms → `throttled` 감지가 유지되어야 하나 **숨김 상태 B 실행은 하지 않았다**(수정 회차 검증 항목). 검증: 3매장 A/B + 숨김 1회 | **개선안** |
+| S5 | 스크롤 스텝 900 → 1800px (카드 약 2개) | 326: `window.scrollBy(0, 900);` | [실측] 카드 높이 참제육(90) min 281·p10 728·**중앙값 896**·p90 984·max 1136·평균 859 / 김치찜(174) min 241·p10 656·**중앙값 912**·p90 1008·max 1112·평균 856. DOM 윈도우 8~13카드(중앙값 12 ≈ 10,000px). 900px ≈ 카드 1개/라운드(gained 1 이 48/55R). B2(적응형 대기 + step): 참제육 1800→41R·4.59s / 2700→28R·2.49s / 4500→17R·1.65s; 김치찜 1800→82R·7.03s / 2700→55R·4.95s / 4500→33R·≈3.1s. **전부 집합 동일, wiggle 0, 김치찜 게시중단 1건 포착** | 1800 기준 S2 대비 추가 ≈45%(참제육 8.2→4.6, 김치찜 14.2→7.0). 2700 은 추가 ≈30%p 더 | 스텝이 DOM 윈도우(~10,000px)에 근접하면 카드가 렌더 전에 지나갈 수 있음 → 4500 까지 2매장 누락 0 이나 **한 세션·같은 날 실측**이다. 권장은 보수적으로 1800(윈도우의 1/5). 검증: 3매장 A/B + 다른 날 1회 재실측 | **개선안(조건부: 1800)** |
+| S3 | Step 3 적용 후 2.5초 고정 대기 → "이전 값에서 바뀌고 non-null 로 200ms 안정될 때까지 폴링, 상한 3초" | 174: `await new Promise(s => setTimeout(s, 2500));` | [실측] 참제육 적용 클릭 후 50ms 샘플: 915 → **null@76ms**(다이얼로그 open) → 닫힘@136ms → **90@244ms** → 4연속 동일@**469ms**. 3000ms 시점 값(labelOk true·range 8/21~9/20·ET 90)과 동일. 9/9 기록: 252~959ms(김치찜 숨김 상태 959) | ≈ **2.0**(2500→~500) | 조건 불충족 시(30일 건수가 이전 값과 같음, 이미 30일 상태) 상한 3초까지 대기 → 지금보다 0.5초 느릴 뿐. null 과도기(76~187ms)는 non-null 조건이 걸러낸다. 검증: 3매장 ET 동일 | **개선안(순위 낮음)** |
+| S6 | 도구 왕복·코드 생성 절감 — (i) Step 2 + Step 3 + 4-1(정의만) 을 한 호출로 병합, (ii) 정의 블록을 같은 오리진 `localStorage` 에 1회 저장 후 다음 매장에서 재주입 | 79~110 / 139~183 / 211~355 세 블록이 매장마다 별도 호출 | [실측] 위 벽시계 분해표: 4-1 블록 전 32.8~40.8s, Step 3 블록 전 20.4~23.8s, 4-3 블록 전 12.3~25.7s — 게시중단 없는 매장에서 도구 쪽 72~74s vs 사이트 23~24s | (i) 왕복 2회분 ≈ **15~30**(추정) (ii) 4-1 재전송 생략 ≈ 30~40 × 2매장(추정) | 수집 로직 무변경이라 결과 집합 영향 없음. (i) 는 hidden 게이트 이전에 Step 3 이 실행되는 순서 변경(Step 3 은 숨김 상태에서도 정상 — 9/9 실측)이므로 **사용자 승인 사항**. (ii) 는 세션 간 stale 코드 위험 → 버전 키 필수. **절감치는 실측 아님[추론]** | **후보(승인 필요)** |
+
+S4(별점 필터): **없음.** 기간 다이얼로그 텍스트 `기간 | 최근 7일 | … | 최근 30일 | … | 최근 3개월 | … | 최근 6개월 | … | 날짜 직접 선택 | 한번에 6개월까지 조회할 수 있어요. | 23년 4월23일 이전 리뷰는 주문유형을 조회할 수 없어요. | 적용`(라디오 5개 `name="review-date-filter"`, 버튼 `닫기`(aria-label)·`적용`), 정렬 메뉴 `리뷰 정렬 | 추천순 | 최신순 | 취소`, 탭 `전체(90)`·`미답변(5)`·`차단(0)`. 별점 관련 문구는 통계 표기 `평균 별점` 만.
+
+하지 않은 것(지시대로): 매장 간 대기·`_dismissAll` 400ms 등 합쳐 2초 미만 항목, 스크린샷 깨우기·browser_batch 사이클, 계정 전환·창 꺼내기 자동화.
+
+### 실험 코드 원문 (수정 회차가 그대로 쓴다)
+
+S1 — `_scrollS1` (원본 `_scroll` 에서 두 곳만 다름: ← 주석 참조):
+```javascript
+window._atBottom = () => Math.round(scrollY) + innerHeight >= document.body.scrollHeight - 2;
+window._scrollS1 = async function(budgetMs = 25000, target = null) {
+  const t0 = performance.now(); let rounds = 0, stuck = 0, authExpired = false, throttled = false, bottom = false, wiggles = 0;
+  const before = Object.keys(window._all).length; const roundMs = [];
+  while (performance.now() - t0 < budgetMs) {
+    if (window._lost()) { authExpired = true; break; }
+    rounds++; const rt = performance.now(); const b = Object.keys(window._all).length; const shB = document.body.scrollHeight;
+    window.scrollBy(0, 900);
+    await new Promise(r => setTimeout(r, 250));
+    const a = window._parse();
+    roundMs.push(Math.round(performance.now() - rt));
+    if (roundMs.length >= 3 && roundMs.slice(-3).every(ms => ms > 600)) { throttled = true; break; }
+    if (target && a + Object.keys(window._blocked).length >= target) break;            // ← 원본: if (target && a >= target) break;
+    if (a === b) {
+      if (++stuck >= 3) {
+        wiggles++;
+        await window._dismissAll();
+        window.scrollBy(0, -600); await new Promise(r => setTimeout(r, 200));
+        window.scrollBy(0, 1500); await new Promise(r => setTimeout(r, 600));
+        const a2 = window._parse(); stuck = 0;
+        if (a2 === b && window._atBottom() && document.body.scrollHeight === shB) { bottom = true; break; }   // ← 신설: 바닥 도달 조기 반환
+      }
+    } else stuck = 0;
+  }
+  const after = Object.keys(window._all).length;
+  return { collected: after, gained: after - before, blocked: Object.keys(window._blocked).length, rounds, wiggles, bottom, throttled, hidden: document.hidden,
+    avgRoundMs: roundMs.length ? Math.round(roundMs.reduce((s, x) => s + x, 0) / roundMs.length) : null, authExpired, elapsedMs: Math.round(performance.now() - t0), scrollY: Math.round(scrollY), scrollH: document.body.scrollHeight };
+};
+```
+
+S2·S5 — 지문 `_fp`, 적응형 대기 `_waitB`, `_scrollB(budget, target, step)` (S1 의 두 변경도 포함):
+```javascript
+window._fp = () => { let last = '', n = 0; for (const s of document.querySelectorAll('span')) { const t = s.textContent; if (t && t.length < 30 && /^리뷰번호\s+\d+$/.test(t.trim())) { n++; last = t; } } return n + '|' + last + '|' + document.body.scrollHeight; };
+window._waitB = async function(capMs = 250, settleMs = 50, pollMs = 25) { const t0 = performance.now(); const f0 = window._fp(); while (performance.now() - t0 < capMs) { await new Promise(r => setTimeout(r, pollMs)); if (window._fp() !== f0) { const rem = Math.min(settleMs, capMs - (performance.now() - t0)); if (rem > 0) await new Promise(r => setTimeout(r, rem)); return Math.round(performance.now() - t0); } } return Math.round(performance.now() - t0); };
+window._scrollB = async function(budgetMs = 25000, target = null, step = 900) {
+  const t0 = performance.now(); let rounds = 0, stuck = 0, authExpired = false, throttled = false, wiggles = 0, bottom = false;
+  const before = Object.keys(window._all).length; const roundMs = [], waitMs = [];
+  while (performance.now() - t0 < budgetMs) {
+    if (window._lost()) { authExpired = true; break; }
+    rounds++; const rt = performance.now(); const b = Object.keys(window._all).length; const shB = document.body.scrollHeight;
+    window.scrollBy(0, step);
+    waitMs.push(await window._waitB(250, 50, 25));          // ← 원본: await new Promise(r => setTimeout(r, 250));
+    const a = window._parse();
+    roundMs.push(Math.round(performance.now() - rt));
+    if (roundMs.length >= 3 && roundMs.slice(-3).every(ms => ms > 600)) { throttled = true; break; }
+    if (target && a + Object.keys(window._blocked).length >= target) break;
+    if (a === b) { if (++stuck >= 3) { wiggles++; await window._dismissAll(); window.scrollBy(0, -600); await new Promise(r => setTimeout(r, 200)); window.scrollBy(0, 1500); await new Promise(r => setTimeout(r, 600)); const a2 = window._parse(); stuck = 0; if (a2 === b && window._atBottom() && document.body.scrollHeight === shB) { bottom = true; break; } } } else stuck = 0;
+  }
+  const after = Object.keys(window._all).length;
+  return { collected: after, gained: after - before, blocked: Object.keys(window._blocked).length, rounds, wiggles, bottom, throttled, hidden: document.hidden,
+    avgRoundMs: roundMs.length ? Math.round(roundMs.reduce((s, x) => s + x, 0) / roundMs.length) : null, avgWaitMs: waitMs.length ? Math.round(waitMs.reduce((s, x) => s + x, 0) / waitMs.length) : null, waitCapHits: waitMs.filter(w => w >= 250).length,
+    authExpired, elapsedMs: Math.round(performance.now() - t0), scrollY: Math.round(scrollY), step };
+};
+```
+
+A/B 대조 헬퍼(기준선 집합은 4-3 직후 `localStorage.setItem('_audit_A_<매장>', JSON.stringify({ all: window._all, blocked: window._blocked, warn: window._warn, res }))` 로 저장):
+```javascript
+window._compareA = function(key) {
+  const A = JSON.parse(localStorage.getItem(key)); const ak = Object.keys(A.all).sort(), bk = Object.keys(window._all).sort();
+  const onlyA = ak.filter(k => !window._all[k]), onlyB = bk.filter(k => !A.all[k]); const fieldDiff = [];
+  for (const k of bk) if (A.all[k]) for (const f of ['stars','date','nickname','menu','reviewText']) if (A.all[k][f] !== window._all[k][f]) fieldDiff.push(k + ':' + f);
+  return { aCount: ak.length, bCount: bk.length, sameSet: !onlyA.length && !onlyB.length, onlyA: onlyA.slice(0, 5), onlyB: onlyB.slice(0, 5), fieldDiff: fieldDiff.slice(0, 8), warnSame: JSON.stringify(A.warn) === JSON.stringify(window._warn), blockedSame: JSON.stringify(Object.keys(A.blocked).sort()) === JSON.stringify(Object.keys(window._blocked).sort()), parseFailA: A.res.parseFail, parseFailB: Object.values(window._all).filter(x => x.stars < 1 || x.stars > 5).length };
+};
+```
+
+S3 — 적용 클릭 뒤 샘플링(원본 `_applyPeriod` 의 `await … 2500` 자리를 아래로 바꿔 계측했다; 후보 코드는 `firstNonNull`/`stable200` 조건으로 return 하면 된다):
+```javascript
+const tApply = performance.now(); apply.click();
+const totalOf = () => { const m = document.body.innerText.match(/전체\s*\(([\d,]+)\)/); return m ? parseInt(m[1].replace(/,/g, ''), 10) : null; };
+const samples = []; let firstChange = null, firstNonNullAfterChange = null, stableAt = null, closedAt = null, lastVal = before, streak = 0;   // before = 적용 전 totalOf()
+while (performance.now() - tApply < 3000) {
+  await new Promise(s => setTimeout(s, 50));
+  const ms = Math.round(performance.now() - tApply); const v = totalOf(); const op = isOpen();
+  if (samples.length < 12 || v !== lastVal) samples.push([ms, v, op ? 'open' : 'closed']);
+  if (closedAt === null && !op) closedAt = ms;
+  if (firstChange === null && v !== before) firstChange = ms;
+  if (firstChange !== null && firstNonNullAfterChange === null && v !== null && v !== before) firstNonNullAfterChange = ms;
+  if (v === lastVal && v !== null && v !== before) { streak++; if (streak >= 4 && stableAt === null) stableAt = ms; } else if (v !== lastVal) { streak = 0; }
+  lastVal = v;
+}
+```
+
+S2 계측 프로브 `_probe(budget, target, capMs)` — 라운드마다 25ms 샘플링으로 `[scrollY 변화ms, 카드수 변화ms, scrollHeight 변화ms, 리뷰번호 span 수 변화ms, parseMs, gained, DOM 카드수]` 를 기록(속도 후보가 아니라 측정용):
+```javascript
+window._probe = async function(budgetMs = 24000, target = null, capMs = 500) {
+  const t0 = performance.now(); const log = []; let rounds = 0;
+  const sig = () => { const spans = document.querySelectorAll('span'); let n = 0; for (const s of spans) { const t = s.textContent; if (t && /^리뷰번호\s+\d+$/.test(t.trim())) n++; }
+    return { cards: document.querySelectorAll('[class*="ReviewContent-module"]').length, sh: document.body.scrollHeight, nos: n }; };
+  while (performance.now() - t0 < budgetMs) {
+    rounds++;
+    const s0 = sig(); const y0 = Math.round(scrollY);
+    window.scrollBy(0, 900);
+    const rt = performance.now(); let firstCards = null, firstSh = null, firstNos = null, firstScrollY = null;
+    while (performance.now() - rt < capMs) {
+      await new Promise(r => setTimeout(r, 25));
+      const el = Math.round(performance.now() - rt); const s = sig();
+      if (firstScrollY === null && Math.round(scrollY) !== y0) firstScrollY = el;
+      if (firstCards === null && s.cards !== s0.cards) firstCards = el;
+      if (firstSh === null && s.sh !== s0.sh) firstSh = el;
+      if (firstNos === null && s.nos !== s0.nos) firstNos = el;
+      if (firstCards !== null && firstSh !== null && firstNos !== null) break;
+    }
+    const pt = performance.now(); const b = Object.keys(window._all).length; const a = window._parse(); const parseMs = Math.round((performance.now() - pt) * 10) / 10;
+    log.push([firstScrollY, firstCards, firstSh, firstNos, parseMs, a - b, sig().cards]);
+    if (target && a >= target) break;
+  }
+  return { rounds, collected: Object.keys(window._all).length, blocked: Object.keys(window._blocked).length, elapsedMs: Math.round(performance.now() - t0), log };
+};
+```
+
+## 정확성 판정 (이번 회차 지시 P1~P7)
+
+- **P1 필터 적용 확인(이월 ③)** → **결함 1로 승격.** 재현 절차·수치는 결함 1 행. 시험한 엄격 판정 코드(기간 **버튼 자신의** 텍스트에서 두 날짜를 읽고, 다이얼로그가 닫혀 있어야 통과):
+  ```javascript
+  const strict = () => {
+    const inView = el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+    const open = [...document.querySelectorAll('[role="dialog"],[aria-modal="true"]')].some(e => inView(e) && /기간/.test(e.innerText || '') && /최근\s*\d+\s*(일|개월)/.test(e.innerText || ''));
+    const btn = [...document.querySelectorAll('button,[role="button"]')].find(e => /최근\s*\d+\s*(일|개월)/.test(e.innerText || '') && inView(e));
+    const txt = btn?.innerText || '';
+    const mm = txt.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})[^~]*~\s*(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
+    const pad = n => String(n).padStart(2, '0');
+    const today = new Date(); const from = new Date(today); from.setDate(from.getDate() - 30);
+    const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const rs = mm ? `${mm[1]}-${pad(mm[2])}-${pad(mm[3])}` : null, re = mm ? `${mm[4]}-${pad(mm[5])}-${pad(mm[6])}` : null;
+    return { dialogOpen: open, btnLabel: txt.split('\n')[0], rangeStart: rs, rangeEnd: re, expectStart: iso(from), expectEnd: iso(today), pass: !open && rs === iso(from) && re === iso(today) };
+  };
+  ```
+  결과: 라디오만 바꾼 열린 상태 `{dialogOpen:true, btnLabel:"최근 6개월", rangeStart:"2026-03-21", expectStart:"2026-08-21", pass:false}`, 닫고 미적용 `pass:false`, 정상 적용(기준선 3매장) 버튼 텍스트 `최근 30일|2026. 8. 21 (금) ~ 2026. 9. 20 (일)` → `2026-08-21 ~ 2026-09-20` 일치. 사이트의 "최근 30일" = 오늘−30일 ~ 오늘(8/21~9/20) 확인. 자정 전후 실행 시 `today` 가 넘어가는 경계는 ±1일 허용을 검토할 것[추론].
+- **P2 countMatch 편입** → 3매장 성립(174=173+1, 86, 90), 9/9 포함 6/6. 편입 비용·이득 한 줄씩은 개선안 ① 에. **사용자 결정.**
+- **P3 로그아웃 URL 패턴** → **[실측] 판정 완료.** 계정A 로그아웃 후 `https://self.baemin.com/shops/14697934/reviews` navigate → 12.9~16.5초 샘플 8회 모두 `host: biz-member.baemin.com`, `path: /login`, 쿼리 키 `[returnUrl, __ts]`. `/login|signin|auth/i.test(location.href)` = **true**, `noShop` false, `titleOk('참 제육')` false, `document.title` "배민비즈회원", 본문 118자: `통합로그인 |  | 자동 로그인 |  | 아이디 저장 |  | 로그인 | 아이디·비밀번호 찾기 | 아이디로 회원가입 |  | 또는 소셜 계정으로 시작 |  | 카카오 | 네이버 | 애플 | 자동 슬라이드 쇼 중지 | 2 | / | 2 |  | © Woowa Brothers Corp.` → Step 2 의 `isLogin` 과 `_lost()` 의 URL 패턴은 **전면 리다이렉트 경로에는 맞다.** 단 수집 도중(SPA 상태에서) 세션이 끊길 때도 같은 리다이렉트가 일어나는지는 조건을 만들 수 없어 여전히 [추론]. 부수 발견 → 결함 2(반환값 BLOCKED).
+- **P4 닉네임 실패 1건** → **결함 4.** DT 에 `픽업` 추가 필요 여부: 이 건과 무관(첫 줄 `알뜰배달`). 픽업 카드는 김치찜 30일에 2건 있고 fallback 으로 정상 → 개선안 ⑤(a) 로 이월(순위 5).
+- **P5 더보기·답글** → [실측] 3매장 349건 중 `더보기` 문구 0건. 최장 리뷰 곱도리 2026090102903819 **206자**: DOM 본문 206자 = parsed 206자(문자열 일치), 참제육 최장 2026092002746037 168자도 일치. 카드 안 `-webkit-line-clamp` 는 메타 span(배달유형·닉네임 등, clamp 1)에만 있고 본문에는 없음. 사장님 답글: 카드 줄 순서가 `… 주문메뉴 | <메뉴> | 배달리뷰 | 좋아요 | 사장님 | <답글 날짜> | <답글 본문…> | 삭제 | 수정 | 사장님 댓글 추가하기` 라 `pub`(날짜~주문메뉴 구간) 에 답글이 섞이지 않음 — 답글 2개 카드(2026091002657117)·1개 카드(2026091802618293) 확인. **단 같은 대조에서 결함 3(파트너전용 라벨) 발견.** `(텍스트 없음)` 105/349 건은 샘플 2건 확인 결과 실제 본문 없음(배달리뷰 칩 + 답글만).
+- **P6 실행 전 자동 백업** → 개선안 ②(쿠팡 Step 0 블록 이식). **사용자 승인 사항.**
+- **P7 양방향 대조표**
+
+| 방향 | 항목(출처) | 상대 스킬 해당 여부 | 근거 |
+|---|---|---|---|
+| 쿠팡→배민 | 결함 1 `too_old` 날짜 규칙 제거 | **해당 없음** | 배민 5-2(516~524행)는 날짜 규칙 없이 리뷰번호 부재만으로 삭제. N-3 부수효과(모르는 매장 행 영구 잔존)도 배민에 동일하게 존재하나 쿠팡과 같은 이유로 의도된 동작 |
+| 쿠팡→배민 | 결함 2·정정 2 잘림 서술 `[TRUNCATED]` 통일 | **해당 — 결함 7** | 배민 419행 `끝이 잘린 JSON`. 이번 세션 3회 관측 |
+| 쿠팡→배민 | 결함 3·개선안 1 API 오류 봉투 | 해당 없음 | 배민은 API 미사용 |
+| 쿠팡→배민 | 개선안 2 Step 0 자동 백업 | **해당 — 개선안 ②(P6)** | 쿠팡 SKILL.md 47~50행 블록. 배민 Step 5 실패 대체 경로는 교차 정정 회차에 이미 `backup/` 으로 맞춤 |
+| 쿠팡→배민 | 개선안 2(구 4) 저장 후 재열기 확인 | **해당 — 개선안 ③** | 두 스킬 모두 없음 |
+| 쿠팡→배민 | 개선안 3(구 5) `ratingFail` 비율 임계 | **해당 — 개선안 ④** | 배민 396행 전건 실패만 판정 |
+| 쿠팡→배민 | 점검표 개정안 8 audit-only 계측 1줄 허용 | **해당 — 점검표 개정안 3** | 이번 회차가 실제로 필드 추가·localStorage 보관을 썼다 |
+| 쿠팡→배민 | 점검표 개정안 9 사본 dry-run 허용 | **해당 — 점검표 개정안 4** | 배민 점검표는 "Step 5 실행하지 마라" 만 |
+| 쿠팡→배민 | 정정 1 "바이트 수 적지 않는다, 행수는 `wc -l`" | **해당 — 점검표 개정안 5** | 배민 기준선·개정안 10 에 bytes 표기 있음 |
+| 쿠팡→배민 | v2.1 "문구 교체는 파일 전체 검색으로" | **해당 — 점검표 개정안 6** | 배민 [수정 회차에 적용할 것] 에 없음 |
+| 배민→쿠팡 | 결함 3 Step 0 세 줄 분리 | **해당 — 쿠팡 미수정** | 쿠팡 SKILL.md 39행 `ls -d $HOME/mnt/claude && python3 -c "import openpyxl;print('openpyxl ok')" && ls $HOME/mnt/claude/'~$쿠팡_저점수리뷰.xlsx' 2>/dev/null && echo LOCKED \|\| echo UNLOCKED` 그대로. 폴더·openpyxl 부재가 `UNLOCKED` 로 찍히고, 47행 "`UNLOCKED`면 실행 전 백업" 이 이어져 백업 블록은 `백업 대상 없음(첫 실행)` 으로 통과한다[추론 — 쿠팡은 이번에 실행하지 않음] |
+| 배민→쿠팡 | hidden 게이트·`throttled` | 해당 없음[추론] | 쿠팡은 `fetch` 폴링이라 렌더링 정지 영향 없음. 타이머 클램프로 매장 간 `setTimeout(500)` 이 1초가 되는 정도 |
+| 배민→쿠팡 | `countMatch`(collected+blocked=전체) | 해당 없음 | 쿠팡은 `collected === apiTotal` 정확 일치를 이미 씀(쿠팡 개정안 6) |
+| 배민→쿠팡 | 결함 2 반환값에 `location.href`(쿼리) → `[BLOCKED]` | **해당 검토** | 쿠팡 Step 1 주석 68행이 같은 현상을 이미 알고 URL 을 결과에 안 담는다 — 쿠팡 쪽은 이미 대응됨 |
+
+## 실행 실측 기록
+
+- 실행 시각(UTC): 김치찜 navigate 11:35:07 → 4-3 결과 11:44:34 / 곱도리 11:45:55 → 11:48:03 / 참제육 11:51:33 → 11:53:23(KST +9h). 그 뒤 참제육 실험 ~12:05, 계정A 재로그인 후 김치찜 실험 12:08~12:13, 곱도리 P4 12:13~12:14.
+- 표준 계측: 탭 생성 직후 `hidden: true`. 숨김: `setTimeout(250)` 1257/995/1007/996/995ms, rAF 2000ms 내 미도착, `_scroll(25000,null)` 3R [1129,1005,990] → throttled true 3125ms gained 0(6개월 목록 7카드 고정). 가시: 254/260/255/250/250ms, rAF 16ms. 곱도리 Step 2 시점 hidden true(사용자가 Claude 앱에서 답장 중) → 16초 뒤 false — **사용자가 Claude 앱을 보는 동안은 크롬이 가려져 hidden 이 재발한다**(스킬이 채팅 요청을 보낼 때마다 생길 수 있는 상태).
+- Step 2: 3매장 `dismiss: none`, `shopIdOk·titleOk true`, 팝업 0건. Step 3: 3매장 `waited 300`, `labelOk true`, range 동일, 소요 3.15~3.20초. 6개월 기본값 → 30일.
+- 별점 소스: 349/349 SVG 색상 경로(aria-label 0). parseFail 0. 카드 경계 `ReviewContent-module` 349/349, `no_card`·`merged` 0. warns 합계 1(`nick_fail:2026082400693614`).
+- 배달유형 첫 줄 분포(30일): 김치찜 알뜰배달 149/한집배달 21/가게배달 2/**픽업 2**; 곱도리 알뜰배달 74/한집배달 10/가게배달 2; 참제육 미집계. `PK` 신규 키워드 없음. 파트너전용 라벨 `파트너님에게만 보이는 리뷰입니다.` 9건(결함 3).
+- 게시중단 카드(김치찜 2026082401079865) 구조: `알뜰배달 | 빨리빨ㄹ | 2026년 8월 24일 | 리뷰번호 … | 게시중단 요청으로 인해 30일간 임시차단 되었어요 | 원문보기 | 사장님 | 2026년 8월 26일 | …`. "30일간" 이라 9/23 경 차단이 풀리면 정상 수집 대상이 된다(의도된 동작).
+- 저점수: **참 제육 1건(신규)** — 2026092001471500 / 2점 / 2026-09-20 / Kimsunglim / `1인 간장 제육 한상` / `돼지냄새가 너무 심해요……`. 김치찜·곱도리 0건. **Step 5 미실행이라 엑셀에는 반영되지 않았다**(사용자에게 채팅으로 보고).
+- 뷰포트: innerWidth 1920, innerHeight 911(세션 초) → 855(이후). `javascript_tool` 반환 약 1,000자 초과 시 끝에 `[TRUNCATED]`(3회). `location.href` 에 쿼리스트링이 있으면 결과 전체 `[BLOCKED: Cookie/query string data]`(2회).
+- 고정 요소(참제육 @855): 하단 배너 z101 (598,715)~(1308,839) · LNB 하단 (0,711)~(240,855) z2 · FloatingControls (1785,743)~(1865,823) z101 · ChatRoom (1405,111)~(1821,659) z103 · 클래스 없는 전면 요소 (0,0)~(1905,855) z2147483646(확장 오버레이로 추정, `.click()` 경로 영향 없음).
+- CDP 45초 타임아웃: 0회(최대 호출 25.5초).
+- F 실험(5분 숨김 intensive throttling): 연쇄 `setTimeout(250)` 로거를 12:14 UTC 부터 가동. **첫 582초 동안 hidden 은 한 번도 true 가 되지 않아**(가시 상태 gap 평균 255ms·최대 290ms) 측정 불가 → 사용자에게 창을 5분 이상 가려 달라고 요청함. 결과는 아래 "F 실험 결과" 에.
+
+**F 실험 결과 (2026-09-20 12:27~12:36 UTC, 김치찜 탭, 사용자가 다른 탭으로 가려 `hidden: true`)**
+
+- 로거(고전적 연쇄: 콜백 안에서 `setTimeout(tick, 250)` 재예약, 가시 상태로 13분 가동 후 숨김): 숨김 직후 **0~60초는 1초 클램프**(30초 버킷 평균 979/1000ms, 최대 1018) → **약 70초 시점 11,004ms 간격 1회 → 그 뒤 60,000ms 간격으로 정렬**(7회 연속 59,991~60,005ms, 숨김 430초까지 지속). 즉 이 환경에서 intensive wake-up throttling(분당 1회)은 **숨김 5분이 아니라 약 1분 뒤**에 시작했다[실측].
+- 같은 숨김 상태에서 **새 호출로 시작한** `await new Promise(r => setTimeout(r, 250))` 는 1231ms(1초 클램프)였고, 이를 **6회 연쇄**(스킬 `_scroll` 과 같은 패턴, 중첩 1→6)해도 342/1004/998/1002/1000/991ms 로 **60초 정렬이 걸리지 않았다**[실측, 총 5.3초]. 도구 호출은 45초를 넘길 수 없어 "await 연쇄가 숨김 60초 이상 지속되면 정렬되는지"는 측정할 수 없었다.
+- 해석: `_scroll` 은 호출마다 새 task 로 시작하고 배치가 25초 이하이며 `throttled`(3라운드 연속 >600ms)가 약 3초에 반환하므로, **현재 코드에서는 60초 정렬에 닿기 전에 반환한다**. 직전 세션의 45초 CDP 타임아웃 기전으로 intensive throttling 은 오늘 데이터로는 **약해졌다** — 남는 후보는 숨김 탭의 렌더러 동결(Chrome 탭 freezing/에너지 절약)로 evaluate 자체가 응답하지 않는 경우[추론]. 계속 미확정.
+- 스킬에 대한 함의: 4-1 의 hidden 게이트·`throttled` 조기 반환을 유지해야 하는 이유가 하나 더 생겼다(숨김 1분이 지나면 어떤 연쇄 타이머든 분당 1회로 떨어질 수 있다). S2·S5 의 적응형 대기(25ms 폴)도 같은 `roundMs.length >= 3` 검사를 유지해 중첩이 커지기 전에 반환한다 — 숨김 상태 실행은 수정 회차 검증 항목.
+
+## 미확정으로 남긴 것
+
+- 수집 도중(SPA 유지 상태) 세션 만료 시에도 전면 리다이렉트가 일어나 `_lost()` 가 잡는지 — 조건을 만들 수 없었다. P3 는 페이지 진입 시점의 리다이렉트만 실증.
+- Step 3 적용 클릭이 실제로 조용히 무효가 되는 빈도 — 4회 × 3매장 0건. 결함 1 은 "판정 로직이 그 실패를 못 잡는다"는 사실만 재현한 것이다.
+- 45초 CDP 타임아웃 기전(직전 세션) — 이번에도 미재현. F 실험은 위 참조.
+- S5 큰 스텝(2700·4500)의 안전 여지가 다른 날·다른 부하에서도 유지되는지 — 같은 세션 실측만 있다.
+- `expectedTotal === null` 강제 시 흐름 — 미실측(이월).
+- 파트너전용 카드 중 `주문메뉴` 가 없는 2건이 왜 없는지(비공개 리뷰의 표시 규칙인지) — 표본 2건뿐.
+
+## 점검표 개정안
+
+1. **"속도 기준선"·"속도 개선안" 절 상시화 여부.** 이번 회차가 처음 넣었다. 상시화하면 매 회차 (i) 매장별 표(위 열 구성) (ii) 벽시계 분해(페이지 로드 / 사이트 렌더링 / 도구 왕복·코드 생성 / 사용자 대기) (iii) 후보별 (a)(b)(c)(d) + A/B 합격 기준을 고정 형식으로 적게 된다. **비용:** 회차당 A/B 실험 10~20분과 계정 재로그인 1회. **권고:** 기준선 표와 벽시계 분해만 상시(계측은 원래 실행에 필드 몇 개 얹는 수준), 실험 절은 "사용자가 속도를 목표로 지시한 회차에만".
+2. **리뷰번호 집합 보관 방법 고정:** 4-3 직후 같은 오리진 `localStorage` 에 저장 → navigate·재로그인 뒤에도 남아 A/B 대조가 페이지 안에서 끝난다(이번 회차 실측). 점검 종료 시 삭제. 도구 반환 1,000자 한계를 우회하는 유일한 저비용 방법.
+3. **audit-only 계측 허용 규칙 명시**(쿠팡 개정안 8 이관): 반환 JSON 에 타이밍 필드 추가·localStorage 대입 1~2줄은 허용, 판정 로직(`ok`·`reason`·종료 조건·`_parse`)은 불가침. 넣은 줄은 기준선에 적는다.
+4. **사본 dry-run 허용**(쿠팡 개정안 9 이관): "Step 5 는 실제 파일 대상으로는 실행하지 마라, 엑셀 사본에 dry-run 은 한다" — 이번엔 저점수 1건이 있었으므로 dry-run 이 실제 저장 로직을 검증할 기회였는데 하지 않았다.
+5. **바이트 수를 기록에 적지 않는다**(쿠팡 정정 1 이관). 무결성은 `wc -l` 행수 + md5 로. 단 이 파일은 마지막 줄 개행이 없어 `wc -l` 637 / 실제 638 이므로 **행 번호를 인용할 때 어느 기준인지 적는다**(이번 기준선은 실제 줄 번호).
+6. **문구 교체는 파일 전체 검색으로**(쿠팡 v2.1 이관) — [수정 회차에 적용할 것] 에 추가. 결함 5·6·7 처럼 같은 취지 문장이 여러 곳(26·334·365·370 등)에 있다.
+7. **C 항목에 "도구가 결과를 차단·절단하는 경로" 추가:** 반환값에 쿼리스트링 포함 URL 이 들어가면 `[BLOCKED]`, 1,000자 초과면 `[TRUNCATED]`. 결함 2 가 이 유형.
+8. **③ 실행 준비 조건에 추가:** "점검 중 사용자에게 메시지를 보낼 때마다 사용자가 Claude 앱을 보면 크롬이 가려져 hidden 이 재발할 수 있다 — 매장 Step 2 마다 hidden 을 다시 본다"(곱도리 실측).
+9. **F 실험 절차 구체화:** 정상 계측이 끝난 뒤 연쇄 `setTimeout(250)` 로거를 심고 사용자에게 5분 이상 가려 달라고 요청, 분 단위 gap 버킷으로 읽는다(이번 회차 코드 재사용). 사용자가 Claude 앱을 안 보는 환경(두 모니터 등)에서는 자연 발생하지 않는다.
+10. **B 항목 "하단 배너 겹침" 격하:** 2회 연속 겹침 없음·JS `.click()` 경로 무관 → "다이얼로그 개폐 상태별 `elementFromPoint`" 를 매 회차 필수에서 "레이아웃 변경 의심 시에만" 으로.
+11. **B 항목에 "파트너전용 라벨 카드 1건 대조" 추가:** 결함 3 유형은 저점수가 희소해 저장 결과로는 드러나지 않는다. 3매장 파트너전용 리뷰번호 목록(위 결함 3)을 표본으로.
+12. **[의도된 동작]에 추가:** "`(텍스트 없음)` 은 본문이 없는 리뷰가 맞다(30% 안팎). 배달리뷰 칩(`좋아요/아쉬워요`)은 본문이 아니라 기록하지 않는다" — 다음 회차가 결함으로 올리지 않도록. (개선안 후보로만 남김)
+13. **머리말 버전 줄:** v4 → v5 로 갱신하며 이번 회차 채택분을 적을 것(2차 커밋).
+
+## 다음 점검에서 대조할 것
+
+- 사용자가 고른 결함·개선안·속도 항목의 수정 반영 여부(수정 회차 기록 참조) — 특히 결함 1(엄격 필터 판정)이 3매장 정상 경로에서 `pass:true` 인지, 결함 3 수정 후 파트너전용 9건의 reviewText 가 본문 1회만 담는지.
+- S2·S5 채택 시 **숨김 상태에서 `throttled` 감지가 유지되는지**(적응형 대기·큰 스텝으로는 미실측), 그리고 4-2 375행 "최대 8회" 상한·363/370행 종료 문구의 정합.
+- S1 채택 시 scrollHeight 미세 변동으로 첫 wiggle 이 바닥 판정을 놓치는 빈도(오늘 1/2).
+- 게시중단 2026082401079865 의 30일 차단 해제(9/23 경) 뒤 김치찜 `blocked` 0·countMatch 유지 여부, 그리고 그 리뷰의 별점.
+- 쿠팡 스킬: Step 0 한 줄 판정(쿠팡 SKILL.md 39행)이 배민 결함 3 과 같은 문제인지 쿠팡 회차에서 판정할 것(이번 회차 [추론]).
+- `expectedTotal === null` 강제 시 흐름(3회차 이월).
+- 새로 달린 참 제육 2점 리뷰(2026092001471500)가 다음 실행에서 엑셀에 신규로 들어가는지(이번엔 Step 5 미실행).
+- F 실험 결과에 따라 45초 CDP 타임아웃 후보(intensive throttling)의 채택·기각.
+
+# 수정 회차에 적용할 것 (점검표에서 옮김 — 다음 단계용)
+
+- **수정은 저장소 `SKILL.md`에서 한다.** 설치본을 직접 고치면 세션이 끝나며 사라진다. 저장소에 push한 뒤 그것으로 패키징해라.
+- **한 번의 수정 → 한 번의 패키징 → 한 번의 재설치.** 중간에 다른 세션을 열면 그 세션은 옛 캐시를 읽고 그 위에 수정한다. 먼저 한 수정이 조용히 사라진다.
+- **수정 후 반드시 파일을 다시 열어 눈으로 확인하고 나서 "완료"라고 말해라.**
+- **고친 뒤 실제 사이트에서 1회 실행해라.** 문서만 고치고 끝내지 마라. 속도 항목은 이번 기준선의 A/B 합격 기준(집합·필드·warns·blocked·parseFail 동일)으로 3매장 재확인.
+- **같은 개념을 두 곳에서 고칠 때는 기준을 대조해라.** 종료 조건(336·363·370·371행), hidden(26·126·334·366·627~629행), 잘림 표기(419행·트러블슈팅)는 같은 규칙이 여러 곳에 있다. **문구 교체는 파일 전체 검색으로**(점검표 개정안 6).
+- **판정 조건을 완화하는 수정을 했으면 원래 잡히던 실패가 여전히 잡히는지 다시 확인해라.** 결함 1 의 엄격 판정은 완화가 아니라 강화지만, 정상 경로 3매장이 통과하는지 반드시 확인.
+- **"되돌리면 안 되는 것" 표에 있는 것을 건드렸으면 그 표도 같이 갱신해라.** S1·S2·S5 는 `_scroll`·`throttled` 행과 접한다.
+- **수정과 검증은 다른 세션에서 한다.**
+- 작업 경로 세 단계: 저장소 `SKILL.md` 수정 → push / `.skill` 재패키징 / **사용자가 Claude 설정에서 재업로드**. 재업로드 전에는 실행에 반영되지 않는다.
+
+---
+
+# 이전 기록 (2026-09-09 회차 — 원문 보존)
+
+# 점검 기준선
+
 점검일: 2026-09-09
 결함 4건 / 개선안 5건 / 인용불가·미입증으로 제외 2건
 직전 기준선 대비: 기준선 파일 없음(신규 개설). 인계 문서(사용자 폴더 `배민리뷰_스킬점검_인계_20260909.md`)의 지적 A~D와 미확정 2건을 입력물로 판정: 해결 0건, 미해결 3건(A·B·C), 근거없음 1건(D), 미확정 판정 완료 2건(1번·2번), 신규 3건(결함 2·3·4 — 결함 1은 [A]의 승격)
@@ -246,3 +585,4 @@
 (없음 — 이번이 첫 기준선)
 
 - 2026-09-09 · 카카오톡 전송(Step 6) 미복원 결정. 신규 저점수 리뷰 알림은 채팅창 보고표로 갈음한다. 6/19 세대 SKILL.md는 archive/SKILL_20260619.md 에 보존.
+
