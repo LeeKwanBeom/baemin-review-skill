@@ -23,8 +23,8 @@ URL: `https://self.baemin.com/shops/<shopId>/reviews`
 ## 설계 근거 (건드리기 전에 읽을 것)
 
 - **API를 쓰지 않는 이유**: `self-api.baemin.com`은 페이지와 다른 오리진이라, 브라우저 확장이 주입한 스크립트에서는 인증이 필요 없는 `/v2/maintenance`조차 전부 `Failed to fetch`로 차단된다(2026-09-05 실측, XHR·iframe 네이티브 fetch 모두 동일). 서버 503이나 인증 만료가 아니라 크로스 오리진 차단이므로 헤더를 맞춰도 뚫리지 않는다. DOM 수집이 유일한 경로다. (쿠팡이츠는 API가 same-origin이라 되는 것이고, 같은 방법을 배민에 적용할 수 없다.)
-- **탭이 `document.hidden === true`로 시작할 수 있다 — 스크린샷·wait로는 못 푼다**: `tabs_context_mcp(createIfEmpty=true)`로 만든 새 창은 다른 창(보통 Claude 앱)에 가려져 `hidden: true`로 시작하는 것이 기본값에 가깝다(2026-09-09·09-20 실측, 새 탭 3회 모두). 사용자가 Claude 앱에서 답장을 쓰는 동안에도 크롬이 가려져 다시 `true`가 된다(2026-09-20 곱도리 실측). 그 상태에서는 두 가지가 동시에 일어난다. (1) **감속** — 백그라운드 탭 타이머 클램프로 `setTimeout(250)`이 약 1000ms에 깨어난다(실측 741/994/1007/994/1003ms, 2026-09-20 1257/995/1007/996/995ms). (2) **정지** — `requestAnimationFrame`이 2초 안에 한 번도 오지 않아 무한스크롤 로더가 돌지 않고, 리스트가 더 로드되지 않는다(실측: 12라운드·20초·gained 0, scrollHeight 4362 고정). 이 상태를 모르고 진행하면 190건 중 6건에서 멈춘다. `computer(screenshot)`·`computer(wait)`는 둘 다 `hidden`을 `false`로 바꾸지 못하고 프레임 1장만 강제한다(실측: 직후에도 hidden true, 타이머 ~1000ms). **유일한 해제 방법은 사용자가 크롬 창을 화면 앞으로 꺼내는 것**이며, 그 직후 타이머는 250ms대로 돌아온다(실측 251~261ms). 그래서 **Step 3(스크롤 직전)이 `hidden`을 게이트로 쓰고**, `_scroll`이 감속을 스스로 감지해 조기 반환한다. 팝업 닫기·로그인 확인·기간 필터 적용은 숨김 상태에서도 정상 동작하므로(2026-09-09·09-20 실측) 게이트 앞(Step 2)에 둔다. 스크린샷 깨우기·browser_batch 사이클은 쓰지 않는다.
-- **숨김이 1분을 넘으면 연쇄 타이머가 분당 1회로 떨어질 수 있다**: 콜백 안에서 재예약하는 연쇄 `setTimeout`이 숨김 약 70초 뒤부터 60,000ms 간격으로 정렬되는 것을 실측했다(2026-09-20, 7회 연속 59,991~60,005ms). `_scroll`은 호출마다 새 task로 시작하고 3라운드 연속 600ms 초과면 반환하므로 그 전에 끝나지만, hidden 게이트와 `throttled` 조기 반환을 빼면 안 되는 이유가 하나 더다.
+- **탭이 `document.hidden === true`로 시작할 수 있다 — 스크린샷·wait로는 못 푼다**: `tabs_context_mcp(createIfEmpty=true)`로 만든 새 창은 다른 창(보통 Claude 앱)에 가려져 `hidden: true`로 시작하는 것이 기본값에 가깝다(2026-09-09·09-20 실측, 새 탭 3회 모두). 사용자가 Claude 앱에서 답장을 쓰는 동안에도 크롬이 가려져 다시 `true`가 된다(2026-09-20 곱도리 실측). 그 상태에서는 두 가지가 동시에 일어난다. (1) **감속** — 백그라운드 탭 타이머 클램프로 `setTimeout(250)`이 약 1000ms에 깨어난다(실측 741/994/1007/994/1003ms, 2026-09-20 1257/995/1007/996/995ms). (2) **정지** — `requestAnimationFrame`이 2초 안에 한 번도 오지 않아 무한스크롤 로더가 돌지 않고, 리스트가 더 로드되지 않는다(실측: 12라운드·20초·gained 0, scrollHeight 4362 고정). 이 상태를 모르고 진행하면 190건 중 6건에서 멈춘다. `computer(screenshot)`·`computer(wait)`는 둘 다 `hidden`을 `false`로 바꾸지 못하고 프레임 1장만 강제한다(실측: 직후에도 hidden true, 타이머 ~1000ms). **유일한 해제 방법은 사용자가 크롬 창을 화면 앞으로 꺼내는 것**이며, 그 직후 타이머는 250ms대로 돌아온다(실측 251~261ms). 그래서 **Step 3(스크롤 직전)이 `hidden`을 게이트로 쓰고**, `_scroll`은 **매 라운드 스크롤 전에 `document.hidden`을 보고 숨김이면 스크롤하지 않고 즉시 반환한다**(`throttled: true, reason: 'hidden'`, 2026-09-23 — 가려진 채 렌더링 없이 전진하는 거리를 직전 라운드 1800px 이하로 묶어 렌더 버퍼(위 4,487~5,138px) 안에 둔다). 3라운드 연속 600ms 초과 검사는 hidden이 보고되지 않을 때의 fallback(`reason: 'slow'`)이다. 2026-09-21 검증 회차 실측: 숨김 직후 첫 라운드는 타이머 정렬 때문에 0~1000ms 사이 임의 값이라(544ms 관측) 라운드 3회 검사만으로는 3회 중 1회 감지를 놓치고 바닥 판정이 먼저 걸렸다. 팝업 닫기·로그인 확인·기간 필터 적용은 숨김 상태에서도 정상 동작하므로(2026-09-09·09-20 실측) 게이트 앞(Step 2)에 둔다. 스크린샷 깨우기·browser_batch 사이클은 쓰지 않는다.
+- **숨김이 1분을 넘으면 연쇄 타이머가 분당 1회로 떨어질 수 있다**: 콜백 안에서 재예약하는 연쇄 `setTimeout`이 숨김 약 70초 뒤부터 60,000ms 간격으로 정렬되는 것을 실측했다(2026-09-20, 7회 연속 59,991~60,005ms). `_scroll`은 호출마다 새 task로 시작하고 숨김이면 라운드 시작에 즉시 반환하므로(fallback: 3라운드 연속 600ms 초과) 그 전에 끝나지만, hidden 게이트와 `throttled` 조기 반환을 빼면 안 되는 이유가 하나 더다.
 - **가시 상태의 속도**: 라운드 대기는 고정 250ms가 아니라 **적응형**(DOM 지문이 바뀌면 50ms 뒤 진행, 상한 250ms)이고 스크롤 스텝은 **1800px**(카드 약 2개, 카드 높이 중앙값 약 900px·DOM 윈도우 12~13카드 ≈ 10,000px)다. 2026-09-20 실측(수정 회차): 김치찜 175건(게시중단 1) 83라운드·6.9초, 곱도리 87건 40라운드·3.9초, 참 제육 91건 43라운드·4.2초, 라운드당 83~98ms — 같은 세션에서 돌린 고정 250ms·900px 코드(각 50초·20초·21초)와 리뷰번호 집합·별점·날짜·메뉴가 전건 동일했다. `_parse` 자체는 0.2~2ms라 라운드의 99%가 대기였다.
 - **호출 수를 줄인 이유**: 2026-09-20 계측에서 매장당 도구 왕복·코드 생성이 72~134초로 사이트 렌더링(23~104초)보다 컸다. 큰 정의 블록(약 8KB)을 매장마다 다시 내보내는 것이 주범이라, 팝업·로그인·기간 필터·정의를 **Step 2 한 호출**로 합치고, 정의는 매장 1에서 같은 오리진 `localStorage`에 저장해 매장 2·3은 짧은 재주입 블록으로 되살린다(`eval` 은 이 사이트에서 허용됨 — 2026-09-20 실측). 재주입 키 `SID`는 세션마다 새로 정하며 **다른 세션의 정의를 재사용하지 않는다**(오래된 코드가 조용히 살아나는 것을 막는다).
 - **`javascript_tool` 호출은 45초에서 CDP 타임아웃**이 난다. 배치 예산은 25초를 넘기지 않는다. 반환값은 약 1,000자에서 끝에 `[TRUNCATED]` 표식과 함께 잘리고, 쿼리스트링이 든 URL을 담으면 결과 전체가 `[BLOCKED: Cookie/query string data]`로 바뀐다 — 반환 JSON에 `location.href`를 넣지 않는다.
@@ -303,7 +303,7 @@ window._atBottom = () => Math.round(scrollY) + innerHeight >= document.body.scro
 // DOM 지문: 리뷰번호 span 수 | 마지막 리뷰번호 | scrollHeight. 카드 "수"는 윈도잉으로 12~13 고정이라 신호가 아니다(2026-09-20 실측 55라운드 중 11회만 변화).
 window._fp = () => { let last = '', n = 0; for (const s of document.querySelectorAll('span')) { const t = s.textContent; if (t && t.length < 30 && /^리뷰번호\s+\d+$/.test(t.trim())) { n++; last = t; } } return n + '|' + last + '|' + document.body.scrollHeight; };
 // 적응형 대기: 지문이 바뀌면 settleMs 뒤 진행, 상한 capMs. 폴링은 지문만 보고 _parse는 라운드당 1회 — 예전에 폴링마다 파서를 부르던 구조가 느렸다(되돌리지 말 것).
-// 2026-09-20 실측: scrollBy 뒤 scrollHeight 변화 25~65ms(중앙값 42), 라운드 85~100ms. 숨김 상태에서는 25ms 폴도 1초로 클램프돼 라운드 ≈1000ms가 되고 아래 throttled 검사가 그대로 잡는다.
+// 2026-09-20 실측: scrollBy 뒤 scrollHeight 변화 25~65ms(중앙값 42), 라운드 85~100ms. 숨김 상태에서는 25ms 폴도 1초로 클램프돼 라운드 ≈1000ms가 된다 — `_scroll`은 라운드 시작에 `document.hidden`을 먼저 보므로, 아래 3라운드 검사는 hidden이 보고되지 않을 때의 fallback이다.
 window._wait = async function(capMs = 250, settleMs = 50, pollMs = 25) {
   const t0 = performance.now(); const f0 = window._fp();
   while (performance.now() - t0 < capMs) {
@@ -313,11 +313,15 @@ window._wait = async function(capMs = 250, settleMs = 50, pollMs = 25) {
   return Math.round(performance.now() - t0);
 };
 window._scroll = async function(budgetMs = 25000, target = null, step = 1800) {
-  const t0 = performance.now(); let rounds = 0, stuck = 0, authExpired = false, throttled = false, wiggles = 0, bottom = false;
+  const t0 = performance.now(); let rounds = 0, stuck = 0, authExpired = false, throttled = false, reason = '', wiggles = 0, bottom = false;
   const before = Object.keys(window._all).length;
-  const roundMs = [], waitMs = [];
+  const roundMs = [], waitMs = []; let lastGainY = Math.round(scrollY);   // 마지막으로 gained>0였던 라운드의 scrollY — throttled 뒤 되감기 지점
   while (performance.now() - t0 < budgetMs) {
     if (window._lost()) { authExpired = true; break; }   // 즉시 중단. 재시도해도 소용없다
+    // 숨김 게이트(2026-09-23): 매 라운드 scrollBy 전에 document.hidden을 본다. 숨김이면 스크롤하지 않고 즉시 반환한다 —
+    // 가려진 채 렌더링 없이 전진하는 거리를 최대 1라운드(1800px, 렌더 버퍼 4,487~5,138px 안)로 제한한다. 호출부는 lastGainY로 되감고 이어서 호출한다.
+    // 2026-09-21 검증 회차 실측: 숨김 직후 첫 라운드는 타이머 정렬로 0~1000ms 임의(544ms 관측) → 아래 3라운드 검사가 불성립하고 바닥 판정이 먼저 걸려 가짜 bottom:true가 나왔다(3회 중 1회).
+    if (document.hidden) { throttled = true; reason = 'hidden'; break; }
     rounds++;
     const rt = performance.now();
     const b = Object.keys(window._all).length; const shB = document.body.scrollHeight;
@@ -328,7 +332,8 @@ window._scroll = async function(budgetMs = 25000, target = null, step = 1800) {
     // 감속 자가 감지. 정상 라운드 ≈ 85~100ms(2026-09-20 실측, 적응형 대기). 크롬 창이 가려지면 백그라운드 타이머 클램프로 라운드가 ~1000ms가 되고 렌더링이 멈춰 gained도 0이 된다.
     // 임계 600ms = 정상 최대의 수 배이면서 클램프 값(1000)의 60%. 3라운드 연속을 요구하는 이유: 첫 라운드는 콜드 스타트로 480~741ms까지 관측됐고, 단발 지연을 감속으로 오판하면 안 된다.
     // 감속이면 예산을 다 쓰지 않고 즉시 반환한다(실측: 3.1~5.5초에 반환 — 첫 라운드 콜드 스타트 유무로 변한다. 판정 기준은 시간이 아니라 3라운드 연속 600ms 초과). 호출부가 사용자에게 창을 꺼내달라고 요청한다.
-    if (roundMs.length >= 3 && roundMs.slice(-3).every(ms => ms > 600)) { throttled = true; break; }
+    // 이 검사는 위 숨김 게이트가 잡지 못하는 경우(document.hidden이 보고되지 않는 감속)의 fallback이다 — 그대로 둔다.
+    if (roundMs.length >= 3 && roundMs.slice(-3).every(ms => ms > 600)) { throttled = true; reason = 'slow'; break; }
     // 완전 = 수집 + 게시중단 = 전체(N). collected만 보면 게시중단이 있는 매장은 target에 영원히 못 닿아 예산을 다 쓴다(2026-09-20 결함 5: 김치찜 무진전 2회·50초).
     if (target && a + Object.keys(window._blocked).length >= target) break;
     if (a === b) {
@@ -338,14 +343,16 @@ window._scroll = async function(budgetMs = 25000, target = null, step = 1800) {
         window.scrollBy(0, -600); await new Promise(r => setTimeout(r, 200));
         window.scrollBy(0, 1500); await new Promise(r => setTimeout(r, 600));
         const a2 = window._parse(); stuck = 0;
+        if (a2 > b) lastGainY = Math.round(scrollY);
         // 바닥 도달: wiggle 뒤에도 무진전 + 스크롤이 바닥 + scrollHeight 변화 50px 미만(미세 변동 실측 35px) → 예산을 다 쓰지 않고 반환(실측 3.1초, 예전엔 25초)
-        if (a2 === b && window._atBottom() && Math.abs(document.body.scrollHeight - shB) < 50) { bottom = true; break; }
+        // 가드(2026-09-23): 숨김이 아니고 마지막 라운드가 600ms 이하일 때만 판정한다 — 렌더링 정지 상태(숨김·감속)는 scrollY 클램프·scrollHeight 고정으로 바닥과 구분할 수 없다.
+        if (a2 === b && !document.hidden && roundMs[roundMs.length - 1] <= 600 && window._atBottom() && Math.abs(document.body.scrollHeight - shB) < 50) { bottom = true; break; }
       }
-    } else stuck = 0;
+    } else { stuck = 0; lastGainY = Math.round(scrollY); }
   }
   const after = Object.keys(window._all).length;
   return { collected: after, gained: after - before, blocked: Object.keys(window._blocked).length, rounds, wiggles, bottom,
-    throttled, hidden: document.hidden,
+    throttled, reason, hidden: document.hidden, lastGainY,
     avgRoundMs: roundMs.length ? Math.round(roundMs.reduce((s, x) => s + x, 0) / roundMs.length) : null, lastRoundsMs: roundMs.slice(-3),
     avgWaitMs: waitMs.length ? Math.round(waitMs.reduce((s, x) => s + x, 0) / waitMs.length) : null, waitCapHits: waitMs.filter(w => w >= 250).length,
     authExpired, isLogin: /login|signin|auth/i.test(location.href),
@@ -439,19 +446,23 @@ Step 2 반환의 `hidden`이 `true`면 **스크롤로 가지 않는다.** 크롬
 JSON.stringify(await window._scroll(25000, <expectedTotal 또는 null>))
 ```
 
-이 한 줄을 **target(= `collected + blocked` ≥ `expectedTotal`)에 도달하거나 `bottom: true`가 연속 2회 나올 때까지** 반복 호출한다. target 도달은 함수가 스스로 멈추므로 반환값의 `collected + blocked`를 `expectedTotal`과 비교하면 된다.
+이 한 줄을 **target(= `collected + blocked` ≥ `expectedTotal`)에 도달하거나 `bottom: true`가 `hidden: false`인 채로 연속 2회 나올 때까지** 반복 호출한다. target 도달은 함수가 스스로 멈추므로 반환값의 `collected + blocked`를 `expectedTotal`과 비교하면 된다.
 
 - 실측 기준(2026-09-20 수정 회차): 김치찜 175건(게시중단 1) 83라운드·6.9초(1회), 곱도리 87건 40라운드·3.9초(1회), 참 제육 91건 43라운드·4.2초(1회), 라운드당 83~98ms. 이 범위를 크게 벗어나면 먼저 `throttled`·`avgRoundMs`·`waitCapHits`를 본다.
-- **`throttled === true`가 나오면 즉시 멈추고 사용자에게 요청한다.** 크롬 창이 수집 도중 가려진 것이다(라운드 3회 연속 600ms 초과, 실측 998/1001/1001ms·1129/1005/990ms). 스크린샷·wait로는 풀리지 않는다. 3-1과 같은 문구로 요청한다:
+- **`throttled === true`가 나오면 즉시 멈추고 사용자에게 요청한다.** 크롬 창이 수집 도중 가려진 것이다. `reason: 'hidden'`은 라운드 시작에 `document.hidden`이 true여서 스크롤하지 않고 돌아온 것(가려진 채 전진한 거리는 직전 라운드 1800px 이하), `reason: 'slow'`는 hidden이 보고되지 않았는데 라운드 3회 연속 600ms를 넘긴 fallback(실측 998/1001/1001ms·1129/1005/990ms)이다. 스크린샷·wait로는 풀리지 않는다. 3-1과 같은 문구로 요청한다:
   > ⚠️ 크롬 창이 다른 창에 가려져 있어(document.hidden) 리뷰 목록이 로드되지 않습니다. 크롬 창을 화면 앞으로 꺼내 주시고(최소화 해제, Claude 앱에 가려지지 않게) '꺼냈어요'라고 알려주세요.
 
-  응답 후 같은 `_scroll` 호출을 이어서 한다 — `window._all`은 유지되므로 처음부터 다시 할 필요 없다. `throttled` 반환은 호출 상한에 세지 않는다.
-- `bottom: true`는 "wiggle 뒤에도 무진전이고 스크롤이 바닥이며 scrollHeight가 변하지 않은" 상태다(실측 3.1초에 반환). **연속 2회**면 종료한다. 1회로 종료하지 말 것 — 느린 로딩에서 한 배치를 통째로 헛돌 수 있다. `expectedTotal === null`이면 이것이 유일한 종료 근거다. 단 `throttled === true`인 반환은 종료 근거가 아니다.
+  응답 후 `JSON.stringify({hidden: document.hidden})`으로 `false`를 확인하고, **반환값의 `lastGainY`로 되감은 뒤** 같은 `_scroll`을 이어서 호출한다 — `window._all`은 유지되고 `_parse`가 리뷰번호로 중복을 거르므로 되감기 구간을 다시 파싱해도 무해하다:
+  ```javascript
+  window.scrollTo(0, <lastGainY>); JSON.stringify(await window._scroll(25000, <expectedTotal 또는 null>))
+  ```
+  되감지 않으면 가려진 동안 렌더링 없이 지나간 구간의 카드를 놓칠 수 있다(2026-09-21 검증 회차 실측: 숨김 호출 2회 연속 뒤 되감기 없이 재개 → 87/89, 가상 리스트의 위쪽 렌더 버퍼 4,487~5,138px). `throttled` 반환은 호출 상한에 세지 않는다.
+- `bottom: true`는 "숨김이 아니고 마지막 라운드가 600ms 이하이며, wiggle 뒤에도 무진전이고 스크롤이 바닥이며 scrollHeight가 변하지 않은" 상태다(실측 3.1초에 반환). **`hidden: false`일 때만, 연속 2회**면 종료한다. 1회로 종료하지 말 것 — 느린 로딩에서 한 배치를 통째로 헛돌 수 있다. `expectedTotal === null`이면 이것이 유일한 종료 근거다. 단 `throttled === true`인 반환은 종료 근거가 아니다. 숨김·감속 상태에서는 렌더링 정지를 바닥과 구분할 수 없어 함수가 바닥 판정 자체를 하지 않는다(2026-09-23 가드).
 - `blocked`는 건너뛴 게시중단 리뷰 수다. `collected + blocked`가 `expectedTotal`과 같으면 수집이 완전한 것이다(실측: 189 + 1 = 190, 173 + 1 = 174). Step 4가 이 합으로 `ok`를 판정한다.
 - **`authExpired === true`가 나오면 즉시 중단한다.** 수집 도중 세션이 끊긴 것이므로 재시도해도 소용없다. 그 매장은 `ok: false`이고, 부분 수집분으로 엑셀을 동기화하면 안 된다. 사용자에게:
   > ⚠️ [매장명] 수집 도중 로그인이 풀렸습니다. 크롬에서 다시 로그인한 뒤 '완료했어요'라고 알려주시면 해당 매장만 다시 수집합니다.
 - 최대 4회까지만 호출한다(`throttled` 반환 제외). 그 이상은 무한 루프로 본다. 25초 배치 하나가 약 270라운드·480,000px ≈ 카드 500건을 훑으므로 30일 리뷰는 보통 1회, 많아도 2회 + 바닥 확인으로 끝난다.
-- `hidden === true`인데 `throttled === false`인 반환은 라운드 3회를 못 채우고 예산이 끝난 경우뿐이다. 다음 호출에서 `throttled`가 뜬다. **스크린샷·wait로 "깨우기"를 시도하지 않는다** — 2026-09-09 실측에서 둘 다 `hidden`을 풀지 못했고 프레임 1장만 강제해 카드 몇 개가 더 붙을 뿐이다.
+- `hidden === true`인 반환은 `throttled: true, reason: 'hidden'`뿐이어야 한다 — 라운드 시작마다 `document.hidden`을 보므로 숨김 상태에서 `bottom: true`나 예산 소진으로 돌아오지 않는다(2026-09-23. 그 전 코드는 숨김 첫 라운드가 600ms 미만이면 바닥 판정이 먼저 걸려 가짜 `bottom: true`가 나왔다 — 2026-09-21 검증 회차 3회 중 1회). 만약 `hidden: true`인데 `throttled: false`가 오면 라운드 사이에 창이 가려진 것이니 그 반환은 종료 근거로 쓰지 말고 `hidden`을 다시 확인한 뒤 되감기·재호출한다. **스크린샷·wait로 "깨우기"를 시도하지 않는다** — 2026-09-09 실측에서 둘 다 `hidden`을 풀지 못했고 프레임 1장만 강제해 카드 몇 개가 더 붙을 뿐이다.
 
 ---
 
@@ -731,10 +742,12 @@ tabs_close_mcp(tabId=<탭ID>)
 | `Failed to fetch (self-api.baemin.com)` | 크로스 오리진 차단 (정상) | API 경로를 되살리려 하지 말 것. 위 "설계 근거" 참고 |
 | CDP 타임아웃 45초 | 배치 예산이 45초에 근접 | `_scroll` 예산을 25초 이하로 유지 |
 | 결과 끝에 `[TRUNCATED]` | `javascript_tool` 반환 약 1,000자 제한 | Step 4의 Blob 폴백. 수집 결과 JSON은 보통 그보다 짧다 |
-| 라운드가 ~1000ms로 느려짐 (`throttled: true`, `avgRoundMs` ≈ 870~1000) | **감속** — 크롬 창이 가려져(`hidden: true`) 백그라운드 타이머 클램프로 `setTimeout`이 1초에 깨어남(실측 998/1001/1001ms, 1129/1005/990ms). 적응형 대기의 25ms 폴도 같이 1초가 된다 | 스크린샷·wait로는 안 풀린다. 사용자에게 크롬 창을 앞으로 꺼내달라고 요청하고 응답 후 `hidden === false` 확인, 같은 `_scroll`을 이어서 호출 |
-| 스크롤해도 `gained: 0`, scrollHeight가 안 늘어남, `hidden: true` | **정지** — 같은 원인으로 렌더링이 멈춰 rAF가 오지 않고(실측 2초 내 0회) 무한스크롤 로더가 돌지 않음. `computer` 호출은 프레임 1장만 강제해 카드 몇 개가 붙을 뿐 | 위와 같음. `gained: 0`을 "끝"으로 오판하지 말 것 — `throttled`가 함께 true면 종료 근거가 아니다 |
+| `throttled: true, reason: 'hidden'` (rounds 0~N, 직전 라운드까지만 전진) | 라운드 시작에 `document.hidden`이 true — 크롬 창이 가려짐(2026-09-23 게이트) | 스크린샷·wait로는 안 풀린다. 사용자에게 크롬 창을 앞으로 꺼내달라고 요청하고 응답 후 `hidden === false` 확인, `window.scrollTo(0, lastGainY)`로 되감은 뒤 같은 `_scroll`을 이어서 호출 |
+| 라운드가 ~1000ms로 느려짐 (`throttled: true, reason: 'slow'`, `avgRoundMs` ≈ 870~1000) | **감속** — hidden이 보고되지 않은 채 백그라운드 타이머 클램프로 `setTimeout`이 1초에 깨어남(실측 998/1001/1001ms, 1129/1005/990ms). 적응형 대기의 25ms 폴도 같이 1초가 된다. 숨김 게이트의 fallback 경로 | 위와 같음 — 창을 꺼내달라고 요청, `hidden === false` 확인, `lastGainY`로 되감고 이어서 호출 |
+| `bottom: true`인데 `hidden: true` | 2026-09-23 이전 코드: 숨김 첫 라운드가 600ms 미만이면 throttled 검사가 불성립하고, 렌더링 정지(scrollY 클램프·scrollHeight 고정)로 바닥 판정이 먼저 걸림(2026-09-21 검증 회차 3회 중 1회, 46/85) | 현재 코드에서는 나오지 않아야 한다(라운드 시작 hidden 게이트 + 바닥 판정 가드 `!document.hidden && 마지막 라운드 ≤ 600ms`). 나오면 되돌아간 것 — 종료 근거로 쓰지 말고 창을 꺼내달라고 요청한 뒤 `lastGainY`로 되감고 재호출 |
+| 스크롤해도 `gained: 0`, scrollHeight가 안 늘어남, `hidden: true` | **정지** — 같은 원인으로 렌더링이 멈춰 rAF가 오지 않고(실측 2초 내 0회) 무한스크롤 로더가 돌지 않음. `computer` 호출은 프레임 1장만 강제해 카드 몇 개가 붙을 뿐 | 위와 같음. `gained: 0`을 "끝"으로 오판하지 말 것 — `throttled`가 함께 true면 종료 근거가 아니고, `hidden: true`인 반환은 어느 것도 종료 근거가 아니다 |
 | Step 2 결과 `hidden: true` | 새 창이 다른 창(보통 Claude 앱)에 가려진 채 열림 — 기본값에 가깝다. 사용자가 Claude 앱에서 답장을 쓰는 동안에도 재발 | Step 3-1 게이트: 창을 꺼내달라고 요청, `hidden === false` 확인 후 스크롤 |
-| `bottom: true`인데 `collected + blocked < expectedTotal` | 로더 지연 중 바닥으로 판정했거나 진짜 누락 | 같은 `_scroll`을 한 번 더 호출(연속 2회 규칙). 두 번째도 `bottom`이면 Step 4가 `누락 의심`으로 `ok: false` |
+| `bottom: true`인데 `collected + blocked < expectedTotal` (`hidden: false`) | 로더 지연 중 바닥으로 판정했거나 진짜 누락 | 같은 `_scroll`을 한 번 더 호출(연속 2회 규칙). 두 번째도 `bottom`이면 Step 4가 `누락 의심`으로 `ok: false` |
 | `waitCapHits`가 라운드 수에 가까움 | 지문이 안 바뀜 — 사이트가 스크롤에 반응하지 않거나 지문 대상(리뷰번호 span)이 바뀜 | `_fp`의 리뷰번호 정규식과 DOM을 확인. 이 경우 라운드는 예전 고정 250ms와 같아져 느려질 뿐 결과는 같다 |
 | 저장은 됐는데 파일이 계속 커짐 | 빈 행 누적 | `delete_rows`를 쓰는지 확인 (셀 None 비우기 금지) |
 | `verified: false` | 저장 후 재열기 결과가 기대 행·키와 다름 | 파일을 열어 확인. `backup/`의 실행 전 사본과 비교 |

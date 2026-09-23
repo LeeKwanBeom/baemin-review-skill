@@ -8,6 +8,7 @@
           엑셀 백업: `$HOME/mnt/claude/backup/배민_백업_20260920_1132.xlsx` (원본 md5 `6dae739a…`, 헤더 1행·데이터 0행, 점검 후에도 불변) /
           브라우저: Claude in Chrome(크롬 확장)만 사용. 계정 A→B→A 전환·로그아웃·창 꺼내기는 사용자가 수행. 점검 모델: Claude Fable 5.1(Cowork 클라우드)
 1차 커밋(진단): `audit/last-audit.md` 만. `SKILL.md`·`checklist.md` 는 손대지 않았다. 사용자 폴더에 사본 `baemin-review_last-audit_2026-09-20.md` 도 내려놓았다.
+3차 커밋(수정 회차 2, 2026-09-23, 별도 세션): 검증 회차(2026-09-21) 결과 처리 — `SKILL.md` 749→762행(`_scroll` 라운드 시작 hidden 게이트·바닥 판정 가드·`lastGainY` 되감기), `checklist.md` v6, 이 파일에 "수정 기록 2" 절 + 2026-09-20 수정 기록 문구 4곳 정정. 재패키징·재업로드는 하지 않았다.
 2차 커밋(수정, 같은 날 같은 세션 — 사용자 지시): 사용자가 고른 결함 1~7 + 개선안 ①②③④⑤(a) + 추가 1건 + 속도 S1·S2·S3·S5·S6 을 저장소 `SKILL.md`(637→749행)에 반영, 점검표 개정안 1~13 을 `audit/checklist.md`(v5)에 반영, 이 파일에 "수정 기록" 절 추가. **재패키징·재업로드는 하지 않았다** — 사용자가 다른 세션에서 검증을 받은 뒤 직접 한다. 그 전까지 설치본은 진단 시점 버전(md5 `5af791ce…`)이다.
 
 > 이번 회차의 두 목표(사용자 지시): ① 정확성 — 빠뜨리거나 잘못 읽는 리뷰 0건인지, ② 속도 — 같은 결과를 더 짧은 시간·더 적은 도구 호출로. 우선순위는 점검표 안전 규칙 > 이번 지시의 범위 > 정확성 > 속도. 속도 개선안은 "결과 집합이 현재 코드와 동일"이라는 실측이 있는 것만 올렸다.
@@ -323,14 +324,14 @@ window._probe = async function(budgetMs = 24000, target = null, capMs = 500) {
 
 | 항목 | 저장소 SKILL.md 변경(절·함수) | 실측 |
 |---|---|---|
-| 결함 1 (필터 적용 오탐) | **Step 2 `_applyPeriod`**(123~181행): 반환에 `filterOk = !open && startOk && endOk` — 다이얼로그 닫힘 + **기간 버튼 자신의** 텍스트에서 읽은 두 날짜가 오늘−30일 ~ 오늘, 날짜 비교는 `Math.abs(...) <= 1`(±1일, 자정 경계). `labelOk`는 참고 필드로만 남김. 판정 문구(411~414행)와 원칙 3(38행)을 같은 규칙으로. 함수 시그니처가 `(label, days, skipOpen, maxWait)`로 바뀌어 fallback 호출도 `_applyPeriod('최근 30일', 30, true)`로 갱신 | **정상 경로 3매장 `filterOk: true`**(range `2026. 8. 21 ~ 2026. 9. 20`, totalWaitMs 439/498/433). **실패 재현:** 김치찜 적용 상태에서 다이얼로그 열고 6개월 라디오만 클릭 → 신 `filterOk: false`(dialogOpen true), 구 `labelOk: true`; 곱도리 fresh reload(6개월) + 30일 라디오만 클릭·2.8초 → 신 `false`(range 3/21~9/20), 구 `labelOk: true`; 닫기 후 `false`(미적용이 맞음) |
+| 결함 1 (필터 적용 오탐) | **Step 2 `_applyPeriod`**(123~181행): 반환에 `filterOk = !open && startOk && endOk` — 다이얼로그 닫힘 + **기간 버튼 자신의** 텍스트에서 읽은 두 날짜가 오늘−30일 ~ 오늘, 날짜 비교는 `Math.abs(...) <= 1`(±1일, 자정 경계). `labelOk`는 참고 필드로만 남김. 판정 문구(411~414행)와 원칙 3(41행 — 검증 회차 정정: 38행은 빈 줄)을 같은 규칙으로. 함수 시그니처가 `(label, days, skipOpen, maxWait)`로 바뀌어 fallback 호출도 `_applyPeriod('최근 30일', 30, true)`로 갱신 | **정상 경로 3매장 `filterOk: true`**(range `2026. 8. 21 ~ 2026. 9. 20`, totalWaitMs 439/498/433). **실패 재현:** 김치찜 적용 상태에서 다이얼로그 열고 6개월 라디오만 클릭 → 신 `filterOk: false`(dialogOpen true), 구 `labelOk: true`; 곱도리 fresh reload(6개월) + 30일 라디오만 클릭·2.8초 → 신 `false`(range 3/21~9/20), 구 `labelOk: true`; 닫기 후 `false`(미적용이 맞음) |
 | 결함 2 (반환값 BLOCKED) | **Step 2 `_prepare`**(358~369행): 반환에 `path: location.host + location.pathname`만, `url` 제거. `shopIdOk`는 `location.pathname.includes('/shops/<id>/')`. 판정(399행)에 "`[BLOCKED:`로 시작하면 로그인 필요로 간주" 추가. 트러블슈팅 행 추가 | 로그아웃 리다이렉트 상태에서 신 Step 2 실행 → 차단 없이 `{isLogin:true, noShop:false, titleOk:false, shopIdOk:false, path:"biz-member.baemin.com/login", stage:"login"}` 반환(2회) |
 | 결함 3 (파트너전용 라벨) | **Step 2 `_parse`**(190행 `PK_LABEL`, 255~279행): 라벨 줄은 `partnerOnly` 플래그. `pub`이 비고 라벨이 있으면 라벨 다음 줄~`주문메뉴|배달리뷰|사장님` 전까지를 본문으로. 옛 `partner` 경로는 `!partnerOnly`일 때만(별도 비공개 구간 구조 대비). `review = (partnerOnly ? '[파트너전용] ' : '') + pub` | 3매장 파트너전용 9건 전부 `[파트너전용] 본문` 1회(A/B 대조에서 `partner` 분류 5+3+1). 주문메뉴 없는 2건(2026091102615435 등)도 본문 전문 |
-| 결함 4 (닉네임 금지어) | **Step 2 `_parse`**(192행 `META`): 부분 일치 `/주문\|리뷰번호\|배달리뷰\|답글\|사장님/` → 정확 패턴 목록 `[/^\d+회\s*주문\s*고객$/, /^리뷰번호/, /^배달리뷰$/, /^사장님/, /^답글/, /^주문메뉴$/, /^\(최근/, /^\d{4}년\s*\d{1,2}월/, PK_LABEL]`. **원안보다 패턴 4개를 더 넣었다**(날짜 줄·`(최근`·`주문메뉴`·라벨 줄) — 닉네임 줄이 비었을 때 다음 줄(날짜)을 닉네임으로 잡는 경로를 막기 위해 | 곱도리 2026082400693614 닉네임 `내가주문한` 복구, `nick_fail` 0. 3매장 349건 중 닉네임 A/B diff는 이 1건뿐 |
-| 결함 5 (종료 조건 문서-코드) | **Step 2 `_scroll`**(333행): `if (target && a + Object.keys(window._blocked).length >= target) break;`. **Step 3-2**(442·449·453행) 문구를 한 문장으로 통일: "target(= collected + blocked ≥ expectedTotal) 도달 또는 `bottom: true` 연속 2회". 상한 8회 → **4회**(25초 배치 ≈ 270라운드·480,000px ≈ 카드 500건) | 김치찜 175+1=176에서 즉시 break(83R·6.9초). 바닥 경로는 진단 회차 실측(3.1초) 그대로 |
+| 결함 4 (닉네임 금지어) | **Step 2 `_parse`**(192행 `META`): 부분 일치 `/주문\|리뷰번호\|배달리뷰\|답글\|사장님/` → 정확 패턴 목록 `[/^\d+회\s*주문\s*고객$/, /^리뷰번호/, /^배달리뷰$/, /^사장님/, /^답글/, /^주문메뉴$/, /^\(최근/, /^\d{4}년\s*\d{1,2}월/, PK_LABEL]`. **원안(5패턴)보다 패턴 4개를 더 넣었다**(`/^답글/`·`/^주문메뉴$/`·날짜 줄 `/^\d{4}년\s*\d{1,2}월/`·라벨 줄 `PK_LABEL` — 검증 회차 정정: `(최근`은 원안에 이미 있었고 `답글`이 빠져 있었음; `/^사장님$/`→`/^사장님/` 앵커 완화도 포함) — 닉네임 줄이 비었을 때 다음 줄(날짜)을 닉네임으로 잡는 경로를 막기 위해 | 곱도리 2026082400693614 닉네임 `내가주문한` 복구, `nick_fail` 0. 3매장 349건 중 닉네임 A/B diff는 이 1건뿐 |
+| 결함 5 (종료 조건 문서-코드) | **Step 2 `_scroll`**(333행): `if (target && a + Object.keys(window._blocked).length >= target) break;`. **Step 3-2**(442·449·453행) 문구를 한 문장으로 통일: "target(= collected + blocked ≥ expectedTotal) 도달 또는 `bottom: true` 연속 2회". 상한 8회 → **4회**(25초 배치 ≈ 270라운드·480,000px ≈ 카드 500건) | 김치찜 175+1=176에서 즉시 break(83R·6.9초). 바닥 경로는 검증 회차 실측 1.6초(3R·wiggle 1; 진단 회차의 3.1초는 `<50px` 허용 전 프로토타입 6R·wiggle 2 값 — 검증 회차 정정. SKILL.md 341·449행의 "실측 3.1초" 문구는 그대로 둠) |
 | 결함 6 (5.5초 문구) | **Step 2 `_scroll` 주석**(330행): `실측: 3.1~5.5초에 반환 — 첫 라운드 콜드 스타트 유무로 변한다. 판정 기준은 시간이 아니라 3라운드 연속 600ms 초과` | 파일 전체 `grep "5.5초"` → 이 줄만 |
 | 결함 7 (TRUNCATED) | **Step 4**(503행) `만약 반환값 끝에 \`[TRUNCATED]\` 표식이 붙어 잘렸으면(약 1,000자 초과) 그때만 폴백한다`, 설계 근거 불릿(30행), 트러블슈팅 행 추가 | `grep "끝이 잘린"` → 0건 |
-| 개선안 ① (완전성 판정) | **Step 4**(474~481행): `sum = collected + blocked`; `sum < ET → ok:false '누락 의심 — …'`; `ok && sum > ET → warn '… 수집 중 신규 등록 추정'`(ok 유지). 98% 규칙 삭제. 반환에 `warn` 추가, 최종 보고 표 상태 열에 `warn` 그대로. 원칙 3(38행) 문구 갱신 | 정상 3매장 `ok:true countMatch:true`. **실패 재현(김치찜 수집 완료 상태, 판정 함수만 다른 ET로):** ET 177 → `ok:false "누락 의심 — 수집 175 + 게시중단 1 < 전체 177"`, ET 175 → `ok:true warn "수집 175 + 게시중단 1 > 전체 175 — …"`, ET null → `ok:false`, ET 0·0건 → `ok:true` |
+| 개선안 ① (완전성 판정) | **Step 4**(474~481행): `sum = collected + blocked`; `sum < ET → ok:false '누락 의심 — …'`; `ok && sum > ET → warn '… 수집 중 신규 등록 추정'`(ok 유지). 98% 규칙 삭제. 반환에 `warn` 추가, 최종 보고 표 상태 열에 `warn` 그대로. 원칙 3(41행 — 검증 회차 정정: 38행은 빈 줄) 문구 갱신 | 정상 3매장 `ok:true countMatch:true`. **실패 재현(김치찜 수집 완료 상태, 판정 함수만 다른 ET로):** ET 177 → `ok:false "누락 의심 — 수집 175 + 게시중단 1 < 전체 177"`, ET 175 → `ok:true warn "수집 175 + 게시중단 1 > 전체 175 — …"`, ET null → `ok:false`, ET 0·0건 → `ok:true` |
 | 개선안 ② (Step 0 백업) | **Step 0**(65~71행): 쿠팡 블록 이식 `mkdir -p … && if [ -f … ]; then cp … backup/배민_저점수리뷰_$(date +%Y%m%d_%H%M%S).xlsx …; else echo "백업 대상 없음(첫 실행)"; fi`, `백업 실패`면 Step 5 금지. Step 5 문구(538행) "되돌리기는 Step 0이 남긴 backup/ 사본으로" | PC 실행: `백업 완료: 배민_저점수리뷰_20260920_142813.xlsx`, 없는 경로 분기 `백업 대상 없음(첫 실행)` |
 | 개선안 ③ (저장 후 재열기) | **Step 5-2**(658~666행): 저장 뒤 `openpyxl.load_workbook(saved)`로 다시 열어 행수·(매장명, 리뷰번호) 집합이 `kept + new`와 같은지 → 반환 `verified`·`file_rows`. 판정·최종 보고에 `verified: false` 처리 추가 | 사본 dry-run T1~T4 전부 `verified: true`(아래) |
 | 개선안 ④ (parseFail 비율) | **Step 4**(480행): `else if (parseFail > all.length * 0.1) { ok = false; reason = '별점 파싱 실패 N/M — 10% 초과' }`(전건 실패 판정 뒤) | 김치찜 175건에 stars=-1 을 20건(11.4%) 주입 → `ok:false`, 10건(5.7%) → `ok:true parseFail 10`, 전건 → `전건 파싱 실패` |
@@ -339,7 +340,7 @@ window._probe = async function(budgetMs = 24000, target = null, capMs = 500) {
 | S1 (blocked·바닥) | 위 결함 5 + **Step 2 `_scroll`**(342행) `if (a2 === b && window._atBottom() && Math.abs(document.body.scrollHeight - shB) < 50) { bottom = true; break; }` — `\|Δ\| < 50px`(사용자 지시) | 김치찜 target 즉시 종료(무진전 호출 0회) |
 | S2·S5 (적응형 대기·1800px) | **Step 2 `_fp`·`_wait`·`_scroll`**(302~356행): 기준선의 `_scrollB`를 `_scroll`로 채택(`_waitB`→`_wait`). `step` 기본값 1800. 반환에 `wiggles`·`bottom`·`avgWaitMs`·`waitCapHits` | A/B: 김치찜 83R **6.9s**(A 50.3s 2회), 곱도리 40R **3.9s**(A 20.0s), 참제육 43R **4.2s**(A 21.1s). **숨김 1회(참 제육, 사용자가 다른 탭으로 가림):** 3R 975/994/1008ms → `throttled: true` 2.98초, waitCapHits 3 — 감지 유지 |
 | S3 (전체(N) 폴링) | **Step 2 `_applyPeriod`**(163~170행): 고정 2.5초 → 50ms 폴링, 이전 값과 다른 non-null이 4연속(200ms)이면 진행, 상한 3초 | totalWaitMs 439 / 498 / 433 (매장당 약 2.0초 절감), ET 176·87·91 정확 |
-| S6 (호출 병합·재주입) | **Step 2**를 2-A 전체판(정의 + `_prepare` + `_saveDefs`, 92~384행)과 2-B 재주입판(386~393행)으로. `_prepare`가 팝업·로그인·필터·리셋·첫 파싱을 한 호출로, `_saveDefs(sid)`가 함수 10개의 `toString()`을 `localStorage['_bm_defs']`에 `{sid, src}`로 저장, 2-B는 `sid`가 같을 때만 `eval`. **`SID`는 Step 1에서 세션마다 정한다**(75~84행). hidden 게이트는 **Step 3-1**로 이동. **덧붙인 것:** `stage === 'ready'`일 때만 저장(382행) — 로그인 리다이렉트 중 돌리면 `biz-member` 오리진에 저장돼 쓸 수 없다(실측). `dialogOpen: true`면 재시도는 `skipOpen=true`로(414행) | `eval` 허용 확인(self.baemin.com·biz-member 둘 다). 곱도리·참제육 2-B 재주입 성공(srcLen 13,767), 1차 김치찜은 로그인 리다이렉트 때문에 `NO_DEFS` → 2-A 재실행(문서대로). **벽시계(신 흐름, 사용자 대기 0):** 곱도리 navigate→Step 4 **54.7s**(구 128.0s), 참 제육 **35.7s**(구 110.0s). 김치찜은 A 실행이 사이에 끼어 총 벽시계 비교 불가(Step 2 페이지 내 1.4s, `_scroll` 6.9s) |
+| S6 (호출 병합·재주입) | **Step 2**를 2-A 전체판(정의 + `_prepare` + `_saveDefs`, 92~384행)과 2-B 재주입판(386~393행)으로. `_prepare`가 팝업·로그인·필터·리셋·첫 파싱을 한 호출로, `_saveDefs(sid)`가 함수 10개의 `toString()`을 `localStorage['_bm_defs']`에 `{sid, src}`로 저장, 2-B는 `sid`가 같을 때만 `eval`. **`SID`는 Step 1에서 세션마다 정한다**(75~84행). hidden 게이트는 **Step 3-1**로 이동. **덧붙인 것:** `stage === 'ready'`일 때만 저장(382행) — 로그인 리다이렉트 중 돌리면 `biz-member` 오리진에 저장돼 쓸 수 없다(실측). `dialogOpen: true`면 재시도는 `skipOpen=true`로(414행) | `eval` 허용 확인(self.baemin.com·biz-member 둘 다). 곱도리·참제육 2-B 재주입 성공(srcLen 16,509 — 검증 회차 재측정, 함수 10개 `toString()`이 주석까지 담음; 수정 회차 원문 13,767은 오기), 1차 김치찜은 로그인 리다이렉트 때문에 `NO_DEFS` → 2-A 재실행(문서대로). **벽시계(신 흐름, 사용자 대기 0):** 곱도리 navigate→Step 4 **54.7s**(구 128.0s), 참 제육 **35.7s**(구 110.0s). 김치찜은 A 실행이 사이에 끼어 총 벽시계 비교 불가(Step 2 페이지 내 1.4s, `_scroll` 6.9s) |
 | 점검표 v5 | 개정안 1~13 전부 + "되돌리면 안 되는 것" 22행(신설 8행: filterOk·path·완전성 규칙·PK_LABEL·META·칩·적응형/1800/바닥·병합/재주입·백업/검증), A·B·C·F 항목·[의도된 동작]·[판정 기준]·[수정 회차에 적용할 것] 갱신, 기준선 형식에 "속도 기준선(상시)"·"속도 개선안(속도 목표 회차만)" 절 추가 | — |
 
 ### 전/후 속도표 (같은 열 — 후는 신 코드, 같은 날 같은 세션)
@@ -392,7 +393,7 @@ window._probe = async function(budgetMs = 24000, target = null, capMs = 500) {
 
 1. 개선안 ①은 진단 회차의 "정확 일치" 제안 대신 **사용자 지시대로** `<` 실패 / `>` 경고로 넣었다(수집 중 신규 등록을 실패로 만들지 않기 위해).
 2. `[태그만 있는 리뷰]` 라벨을 `[배달리뷰]`로 **통일**했다(위 표 "추가" 행). 지시 범위 밖이지만 라벨 두 개가 같은 정보를 가리키는 것을 피하려는 것이고 실측 영향은 2건.
-3. `META`에 원안(4패턴)보다 4패턴을 더 넣었다(위 결함 4 행).
+3. `META`에 원안(5패턴)보다 4패턴(`답글`·`주문메뉴`·날짜 줄·`PK_LABEL`)을 더 넣었다(위 결함 4 행. 검증 회차 정정 — 원문 "원안(4패턴)"·"날짜·(최근·주문메뉴·라벨"은 열거 오기).
 4. `_saveDefs`를 `stage === 'ready'`일 때만 호출하고, `dialogOpen: true`면 재시도를 `skipOpen=true`로 — 둘 다 실행 중 관찰로 추가.
 5. 4-2 상한 8회 → 4회(사용자 지시 "새 동작에 맞게 정합"에 따라 계산 근거를 적음).
 
@@ -404,17 +405,82 @@ window._probe = async function(budgetMs = 24000, target = null, capMs = 500) {
 - 사본 dry-run T1~T4 재현, 실제 파일 md5 불변.
 - 설치본은 아직 옛 버전(637행)이어야 정상 — 재업로드 전.
 
+## 수정 기록 2 (2026-09-23 수정 회차 2 — 검증 회차(2026-09-21) 결과 처리)
+
+사용자 지시: 검증 회차가 재현 실패로 올린 1건(숨김 상태 가짜 `bottom:true`)만 코드로 고치고, 기록 문구 오차 4건은 기록만 정정, 그 외는 손대지 않음. 재패키징·재업로드는 하지 않았다(검증을 다시 받는다). 설치본은 여전히 637행(`5af791ce…`).
+
+- 수정 대상: 저장소 `SKILL.md` **749행 → 762행(`wc -l`; 마지막 줄 개행 있음)**, md5 `41b3822f…` → 이 커밋의 값. `audit/checklist.md` v5 → v6("되돌리면 안 되는 것" throttled 행·[실행 준비 조건] 숨김 계측). 이 파일의 2026-09-20 수정 기록 4곳 정정(아래).
+- **행 번호는 762행 파일 기준**이며 절·함수명을 함께 적는다.
+
+### 검증 회차(2026-09-21, 사용자 폴더 `baemin-review_검증_2026-09-21.md`) 결과 요약
+
+- 대상 커밋 094d939. 결함 1~7·개선안 ①②③④⑤(a)+칩·S1·S3·S6·점검표 v5·수정 회차 검사 전부 재현. 3매장 A/B(구 코드 설치본 637행 vs 신 코드 749행, 같은 세션) 집합 170=170·85=85·89=89, 필드 차이는 의도한 것뿐(칩 54/17/33, 파트너전용 5/3/1, 라벨 개명 1/0/1, 곱도리 닉네임 1), 저점수 집합 동일. 속도 곱도리 119.9s→30.1s, 참 제육 122.0s→28.2s(navigate→Step 4 벽시계). dry-run T1~T4 재현, 실제 파일 md5 불변.
+- **재현 실패 1건 — S2·S5 행 "숨김 상태 throttled 감지 유지":** 3회 중 2회 감지(2.69초·2.96초), 1회는 `throttled:false` 대신 가짜 `bottom:true`(hidden:true, 46/85, 4.55초). 기전: 숨김 직후 첫 라운드가 타이머 정렬로 0~1000ms 임의(544ms) → 3라운드째 `throttled` 검사 불성립 → 같은 라운드의 `stuck>=3 → wiggle → 바닥 판정`이 먼저 걸림(렌더링 정지로 `_atBottom()`·`|Δ|<50` 둘 다 참). 구 코드에는 바닥 판정이 없어 4라운드째 throttled가 떴을 경로.
+- 부수 관찰: 숨김 중 렌더링 없이 전진한 구간이 호출당 5,400px(3×1800)로 가상 리스트의 위쪽 렌더 버퍼(4,487~5,138px)와 같은 크기 — 숨김 호출 1회 뒤 이어 붙이면 85/85 복구, 2회 연속(10,800px) 뒤에는 87/89(`누락 의심` 안전 실패).
+- 기록 문구 오차 4건: 원칙 3 행 번호 38→41, META 추가분 열거, srcLen 13,767→16,509, 바닥 3.1초→1.6초.
+- 검증 회차는 어제 세션의 `_audit_*`·`_bm_defs`를 Browser 1에서 찾지 못해(Browser 2는 연결 끊김) 같은 세션 A/B로 대체했다.
+
+### 항목별 변경
+
+| 항목 | 저장소 SKILL.md 변경(절·함수, 762행 기준) | 실측 |
+|---|---|---|
+| 1. 라운드 시작 hidden 게이트 | **Step 2 `_scroll`**(324행): `if (document.hidden) { throttled = true; reason = 'hidden'; break; }` — 매 라운드 `scrollBy` 전에 본다. 반환에 `reason`('hidden' / fallback은 'slow' / 정상 ''). 3라운드 연속 600ms 초과 검사(336행)는 그대로 두고 `reason = 'slow'`만 붙임. 설계 근거 26·27행, `_wait` 주석 306행 갱신 | 숨김 호출 7회(3매장·4회 시험) 전부 `throttled:true reason:'hidden'`, `reason:'slow'` 0회. 호출 도중 가려진 경우(H2b) 52라운드 뒤 다음 라운드 시작에서 반환(마지막 라운드 687ms, lastGainY = scrollY 93,600 → 블라인드 전진 0) |
+| 2. 바닥 판정 가드 | **Step 2 `_scroll`**(349행): `if (a2 === b && !document.hidden && roundMs[roundMs.length - 1] <= 600 && window._atBottom() && Math.abs(document.body.scrollHeight - shB) < 50) { bottom = true; break; }` | 가짜 `bottom` 0회(숨김 7회). 가시 바닥 경로 정상: 김치찜 1.05초(3R·wiggle 1·마지막 76ms)/1.59초(258~262ms), 참 제육 1.07초/1.58초 — 모두 `bottom:true hidden:false` 연속 2회 |
+| 3. `lastGainY` + 되감기 | **Step 2 `_scroll`**(318·346·351·355행): 호출 시작 scrollY로 초기화, gained>0인 라운드(wiggle 포함)마다 갱신, 반환에 포함. **Step 3-2**(452~458행): throttled 뒤 `hidden === false` 확인 → `window.scrollTo(0, <lastGainY>); JSON.stringify(await window._scroll(25000, <expectedTotal 또는 null>))`로 이어서 호출(코드 블록 신설) | 되감기 후 재개 4/4: 김치찜 170/170, 곱도리 6개월 518/518(호출 전 가림·호출 도중 가림 각 1회), 참 제육 94/94 — 누락 0. 검증 회차의 "2회 연속" 조건(H1·H2a·H2b 모두 2회 연속)에서도 0 |
+| 문서 | 3-2 449행 종료 조건에 "`hidden: false`인 채로", 460행 bottom 정의에 가드 반영·"`hidden: false`일 때만, 연속 2회", 465행 "hidden===true인데 throttled===false … 예산이 끝난 경우뿐" → "hidden===true인 반환은 `throttled:true, reason:'hidden'`뿐이어야 한다"로 교체. 트러블슈팅 745행(`reason:'hidden'`)·746행(`reason:'slow'` fallback)·747행(`bottom:true`인데 `hidden:true`) 신설/갱신, 748·750행 문구 보강 | `grep "예산이 끝난 경우뿐"` 0건. `lastGainY` 10곳, `reason ... 'hidden'` 5곳(코드 324행 + 문서 4곳) |
+| checklist v6 | "되돌리면 안 되는 것" throttled 행에 게이트·가드·되감기 추가, [실행 준비 조건] 숨김 계측에 `reason:'hidden'`·되감기·2회 연속 조건, 버전 줄 | — |
+
+### 실측 — 가시 경로 A/B (2026-09-23 13:20~14:10 KST, 조회 기간 `2026. 8. 24 (월) ~ 2026. 9. 23`, 같은 세션에서 A = 검증 회차 코드(749행 `_scroll` 원문, `_scrollOld`로 이름만 변경) → B = 신 `_scroll`(762행), 나머지 정의는 동일)
+
+| 매장 | expectedTotal | A: collected+blocked, 라운드·시간 | B: collected+blocked, 라운드·시간 | 집합 | 필드 diff(stars·date·nickname·menu·reviewText) | blocked | warns A/B | countMatch |
+|---|---|---|---|---|---|---|---|---|
+| 김치찜의 정석 | 170 | 169+1, 80R·9.4s(wiggle 1) | 169+1, 80R·7.1s(wiggle 0, avgRoundMs 89) | 169 = 169 | 0/0/0/0/0 | 2026082401079865 동일(9/23에도 아직 차단) | []/[] | true |
+| 곱도리 | 84 | 84+0, 38R·4.0s | 84+0, 38R·3.6s | 84 = 84 | 0 | 0 | []/[] | true |
+| 참 제육 | 94 | 94+0, 43R·4.5s | 94+0, 42R·3.9s | 94 = 94 | 0 | 0 | []/[] | true |
+
+- 검증 회차 값(170/85/89)과 다른 것은 30일 창이 이틀 밀린 것(8/22~9/21 → 8/24~9/23)뿐이며, 같은 세션 A/B로 대체했다. 3매장 `filterOk:true`, totalWaitMs 436/437/430, 2-B 재주입(곱도리·참 제육) 성공(`_bm_defs` src 17,833자 — 새 `_scroll` 포함).
+- 저점수: 김치찜 0, 곱도리 0, **참 제육 2건**(2026092202482591 2점 9/22 지니헤어 `[일석이조] 갓성비 반반 제육 단품` `[파트너전용] 아들이 맛있다고해서 …` — 신규, 2026092001471500 2점 9/20). Step 5 미실행 — 엑셀 md5 `6dae739a…` 불변.
+- 곱도리 6개월(518건)도 가시 상태에서 2회 호출로 완수(215R·25.1s + 47R·4.9s, 518 = 전체(518)).
+
+### 실측 — 숨김 시험 (사용자가 크롬 창을 가림/꺼냄, 신 `_scroll`)
+
+| # | 매장·조건 | 숨김 호출 | 반환 | 되감기 → 재개 |
+|---|---|---|---|---|
+| H1 | 김치찜 30일, 가시 62/170 수집 후 **호출 전** 가림 | 2회 연속 | 둘 다 `throttled:true reason:'hidden' rounds:0 elapsedMs:0`, scrollY 39,600 불변, `bottom:false` | `scrollTo(0, 39600)` → 169+1 = 170 (57R·5.4s), B 집합 대비 누락 0 |
+| H2a | 곱도리 **6개월(518)**, 리셋 직후 호출 전 가림 | 2회 연속 | 둘 다 rounds 0 즉시 | `scrollTo(0, 0)` → 518/518 (253R·22.8s) |
+| H2b | 곱도리 6개월(518), **호출 도중** 가림 | 1회차: 52R·5.5s 진행 뒤 다음 라운드 시작에서 반환(마지막 라운드 687ms, `lastGainY` 93,600 = scrollY) / 2회차: rounds 0 | `reason:'hidden'` ×2, 가짜 bottom 0 | `scrollTo(0, 93600)` → 518/518 (206R·18.5s), 누락 0 |
+| H3 | 참 제육 30일, 가시 55/94 수집 후 호출 전 가림 | 1회 | rounds 0 즉시 | `scrollTo(0, 39600)` → 94/94 (20R·1.8s), 누락 0 |
+
+- 숨김 호출 7회 전부 `throttled:true reason:'hidden'`, 가짜 `bottom` 0회, `reason:'slow'`(fallback) 0회. 검증 회차에서 87/89로 끝났던 "숨김 호출 2회 연속" 조건은 H1·H2a·H2b에서 누락 0.
+- H2a의 `collected:11`은 숨김 상태에서 리셋+`scrollTo(0,0)`을 한 시험 절차의 잔상(렌더링이 멈춰 DOM에 직전 하단 카드가 남음)이며 스킬 흐름에는 없는 상황.
+
+### 수정 회차 검사
+
+- 저장소 `SKILL.md` 코드 블록 14개: javascript 6개(3-2 되감기 블록 신설) `node --check` 통과(플레이스홀더 치환·async 래핑), bash 4개 `bash -n`, 5-2 python heredoc `py_compile` 통과, 코드펜스 28개(짝수), UTF-8 정상, `name: baemin-review` 유지.
+- 파일 전체 grep: `예산이 끝난 경우뿐` 0, 옛 `throttled = true; break; }`(reason 없는 형태) 0, `연속 2회` 문장 3곳 모두 `hidden: false` 조건 병기, `lastGainY` 10곳(코드·주석 5, 문서 5).
+- 파일을 다시 열어 `_scroll` 315~360행, 3-2 449~465행, 트러블슈팅 745~750행, checklist 13·92·187행을 눈으로 확인했다.
+- Browser 1 `self.baemin.com` localStorage: 이 세션의 `_audit_A/B_*` 6개·`_bm_defs` 삭제, 잔존 0. 지난 세션(9/20·9/21) 키는 세션 시작 시 없었다.
+
+### 하지 않은 것
+
+- SKILL.md 347·460행의 "실측 3.1초" 바닥 문구는 지시대로(기록만 정정) 그대로 두었다 — 이번 실측은 1.05~1.59초.
+- `_saveDefs` 함수 목록·Step 4 판정·`_parse`·`_applyPeriod`는 무변경. 재패키징·재업로드 없음.
+
 ## 다음 점검에서 대조할 것
 
 - 사용자가 고른 결함·개선안·속도 항목의 수정 반영 여부(수정 회차 기록 참조) — 특히 결함 1(엄격 필터 판정)이 3매장 정상 경로에서 `pass:true` 인지, 결함 3 수정 후 파트너전용 9건의 reviewText 가 본문 1회만 담는지.
 - S2·S5 채택 시 **숨김 상태에서 `throttled` 감지가 유지되는지**(적응형 대기·큰 스텝으로는 미실측), 그리고 4-2 375행 "최대 8회" 상한·363/370행 종료 문구의 정합.
+  → (수정 회차 2) 검증 회차 3회 중 1회 미감지(가짜 bottom) → 라운드 시작 hidden 게이트·바닥 판정 가드·`lastGainY` 되감기로 수정, 숨김 호출 7회 전부 감지·재개 누락 0. **다음 검증 회차가 볼 것:** 숨김 시험에서 `reason:'hidden'`·가짜 bottom 0·되감기 후 `collected+blocked === expectedTotal`, 호출 도중 가림 1회 포함; `reason:'slow'`(fallback)가 실제로 뜨는 경우가 있는지.
 - S1 채택 시 scrollHeight 미세 변동으로 첫 wiggle 이 바닥 판정을 놓치는 빈도(오늘 1/2).
 - 게시중단 2026082401079865 의 30일 차단 해제(9/23 경) 뒤 김치찜 `blocked` 0·countMatch 유지 여부, 그리고 그 리뷰의 별점.
+  → (수정 회차 2) 9/23 14시 KST에도 아직 차단(blocked 1, 169+1=170). 다음 회차에 재확인.
 - 쿠팡 스킬: Step 0 한 줄 판정(쿠팡 SKILL.md 39행)이 배민 결함 3 과 같은 문제인지 쿠팡 회차에서 판정할 것(이번 회차 [추론]).
 - `expectedTotal === null` 강제 시 흐름(3회차 이월).
 - 새로 달린 참 제육 2점 리뷰(2026092001471500)가 다음 실행에서 엑셀에 신규로 들어가는지(이번엔 Step 5 미실행).
+  → (수정 회차 2) 참 제육에 2점 리뷰가 1건 더 달렸다(2026092202482591, 9/22, 파트너전용). 두 건 모두 다음 실제 실행에서 신규로 들어가야 한다(이번에도 Step 5 미실행).
 - F 실험 결과에 따라 45초 CDP 타임아웃 후보(intensive throttling)의 채택·기각.
 - (수정 회차 추가) 설치본 md5가 저장소 `SKILL.md`(수정 회차 버전, 749행)와 같은지 — 다르면 "재업로드가 안 된 것". 사용자가 검증 세션 뒤 재패키징·재업로드하기로 함.
+  → (수정 회차 2) 기준은 이제 762행 버전(이 커밋). 검증 회차 2를 통과한 뒤 재패키징·재업로드.
 - (수정 회차 추가) 남은 도구 오버헤드의 대부분인 Step 4 블록(약 2KB) 생성 16~24초 — 정의에 `_extract(ET, FILTER_OK, AUTH, name)` 함수로 넣고 한 줄 호출로 바꾸는 후보(미채택).
 - (수정 회차 추가) `localStorage`에 남긴 `_audit_A_*`·`_audit_B_*`는 검증 회차가 대조 후 지울 것. `_bm_defs`는 두어도 된다(SID 불일치로 재사용 안 됨).
 
