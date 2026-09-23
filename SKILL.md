@@ -1,6 +1,6 @@
 ---
 name: baemin-review
-description: "배달의민족(배민) 셀프서비스에서 저점수(1~3점) 리뷰를 자동으로 수집해 엑셀에 저장하는 스킬. 사용자가 \"배민 리뷰 조회\", \"배민 리뷰 확인\", \"저점수 리뷰 체크\", \"배민 리뷰 해줘\", \"배민 스킬\" 등 배민 리뷰와 관련된 요청을 할 때 반드시 이 스킬을 사용할 것. 크롬으로 배민 셀프서비스에 접속해 최근 30일 리뷰를 DOM에서 수집하고, 저점수만 골라 \"전체\" 단일 시트 엑셀에 저장한다."
+description: "배달의민족(배민) 셀프서비스에서 저점수(1~3점) 리뷰를 자동으로 수집해 엑셀에 저장하는 스킬. 사용자가 \"배민 리뷰 조회\", \"배민 리뷰 확인\", \"저점수 리뷰 체크\", \"배민 리뷰 해줘\", \"배민 스킬\" 등 배민 리뷰와 관련된 요청을 할 때 반드시 이 스킬을 사용할 것. 크롬으로 배민 셀프서비스에 접속해 최근 3개월 리뷰를 DOM에서 수집하고, 저점수만 골라 \"전체\" 단일 시트 엑셀에 저장한다."
 ---
 
 # 배민 저점수 리뷰 수집
@@ -38,7 +38,7 @@ URL: `https://self.baemin.com/shops/<shopId>/reviews`
 
 1. **`expectedTotal`은 `0`과 `null`이 다르다.** `0`은 "그 기간에 리뷰가 없음이 확인됨"이고, `null`은 "총건수를 못 읽음 = 확인 필요"다. `null`에 `|| 0`을 붙이지 말 것. `null`인 매장은 스크롤은 끝까지 하되 **저장 단계에서 읽지도 쓰지도 않는다**(기존 행 보존).
 2. **별점을 못 읽은 리뷰를 조용히 버리지 않는다.** `parseFail`로 세고, `[별점확인필요]`를 붙여 저점수 목록에 남기며, 최종 보고에 건수를 올린다. 4~5점으로 **확인된** 리뷰만 제외한다.
-3. **매장 성공/실패는 `ok` 플래그로 판정한다.** `ok: true`는 "기간 필터가 적용됐고(다이얼로그 닫힘 + 기간 버튼의 날짜가 오늘−30일 ~ 오늘, ±1일) · 총건수를 읽었고 · **수집 + 게시중단이 전체(N) 이상**이고 · 별점 파싱 실패가 10% 이하이고 · 수집 도중 세션이 끊기지 않았다"를 전부 만족할 때만 붙는다. 기본값은 실패다. 저장 스크립트는 `ok !== true`인 매장을 통째로 건너뛴다.
+3. **매장 성공/실패는 `ok` 플래그로 판정한다.** `ok: true`는 "기간 필터가 적용됐고(다이얼로그 닫힘 + 기간 버튼의 날짜가 오늘−92일 ~ 오늘, ±1일 — 배민 "최근 3개월"은 92일 고정) · 총건수를 읽었고 · **수집 + 게시중단이 전체(N) 이상**이고 · 별점 파싱 실패가 10% 이하이고 · 수집 도중 세션이 끊기지 않았다"를 전부 만족할 때만 붙는다. 기본값은 실패다. 저장 스크립트는 `ok !== true`인 매장을 통째로 건너뛴다.
 
 > 실패한 매장도 **JSON 배열에서 빼지 않는다.** `ok: false`인 채로 그대로 넣는다. 저장 스크립트가 `ok`를 보고 스스로 건너뛴다 — 사람이 골라내지 않는다.
 
@@ -85,7 +85,7 @@ navigate(url=https://self.baemin.com/shops/14698107/reviews, tabId=<탭ID>)
 
 ---
 
-## Step 2: 준비 — 팝업 닫기 + 로그인 확인 + 기간 필터 "최근 30일" + 파서·스크롤 정의 (매장마다, 1회 호출)
+## Step 2: 준비 — 팝업 닫기 + 로그인 확인 + 기간 필터 "최근 3개월" + 파서·스크롤 정의 (매장마다, 1회 호출)
 
 한 호출로 끝낸다. 매장 1(또는 재주입이 `NO_DEFS`인 매장)은 **2-A 전체판**, 매장 2·3은 **2-B 재주입판**을 쓴다. `<SHOP_ID>`, `<매장명>`, `<SID>`는 실제 값으로 치환한다. `find()`나 스크린샷을 쓰지 않는다.
 
@@ -120,7 +120,8 @@ window._dismissAll = async function(n = 3) {
 
 // 기간 필터. 적용 확인은 "다이얼로그 닫힘 + 기간 버튼 자신의 두 날짜가 오늘-days ~ 오늘(±1일)"이다.
 // 본문 전체에서 라벨을 찾던 예전 방식(labelOk)은 열린 다이얼로그의 옵션 라벨을 잡아, 적용을 안 눌러도 true가 됐다(2026-09-20 재현). 되돌리지 말 것.
-window._applyPeriod = async function(label = '최근 30일', days = 30, skipOpen = false, maxWait = 3000) {
+// days는 배민이 실제로 쓰는 고정 일수다 — 달력 개월이 아니다(2026-09-23 실측: 30일→오늘−30, 3개월→오늘−92(6/23~9/23), 6개월→오늘−183). 3개월은 반드시 92.
+window._applyPeriod = async function(label = '최근 3개월', days = 92, skipOpen = false, maxWait = 3000) {
   await window._dismissAll();   // 팝업이 열려 있으면 필터 버튼 클릭을 가로채서 엉뚱한 기간이 선택된다
   const inView = el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
   // 전체(N) — 쉼표 포함 숫자를 반드시 처리한다. "전체(1,460)"에서 \d+ 만 쓰면 1로 읽혀 수집이 1건에서 끝난다.
@@ -169,7 +170,7 @@ window._applyPeriod = async function(label = '최근 30일', days = 30, skipOpen
   }
   const open = isOpen();
   const btn = [...document.querySelectorAll('button,[role="button"]')].find(e => /최근\s*\d+\s*(일|개월)/.test(e.innerText || '') && inView(e));
-  const txt = btn?.innerText || '';   // 적용 후 버튼 텍스트: "최근 30일\n2026. 8. 21 (금) ~ 2026. 9. 20 (일)"
+  const txt = btn?.innerText || '';   // 적용 후 버튼 텍스트: "최근 3개월\n2026. 6. 23 (화) ~ 2026. 9. 23 (수)"
   const mm = txt.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})[^~]*~\s*(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
   const day = (y, m, d) => Date.UTC(+y, +m - 1, +d) / 86400000;
   const now = new Date(); const t0 = day(now.getFullYear(), now.getMonth() + 1, now.getDate());
@@ -199,9 +200,11 @@ window._parse = function() {
     // 부모로 walk-up하는 예전 방식은 이웃 리뷰까지 병합해 데이터를 섞어버렸다 — 되살리지 말 것.
     const card = s.closest('[class*="ReviewContent-module"]');
     if (!card) { window._warn.push('no_card:' + no); continue; }
-    // 우리가 신고해 내린 리뷰 — 수집 제외. 단 건수는 센다: 페이지의 전체(N)에는 포함되므로
-    // collected + blocked === expectedTotal 로 수집 완료를 검증할 수 있다(2026-09-09 189 + 1 = 190, 2026-09-20 173 + 1 = 174).
-    if (card.innerText?.includes('게시중단 요청으로 인해')) { window._blocked[no] = 1; continue; }
+    // 손님 화면에 없는 리뷰는 수집 제외 — 우리가 신고해 내린 리뷰(temp: 30일 임시차단 "게시중단 요청으로 인해", perm: "임시조치에 대한 작성자 응답이 없어 영구 게시중단")와
+    // 손님이 지운 리뷰(deleted: "게시자가 삭제한 리뷰입니다"). 단 건수는 센다: 페이지의 전체(N)에는 포함되므로 collected + blocked === expectedTotal 로 수집 완료를 검증한다
+    // (2026-09-09 189 + 1 = 190, 2026-09-20 173 + 1 = 174). perm·deleted는 3개월로 넓힌 2026-09-23에 처음 나타났다(참 제육 저점수 8건 중 perm 4·deleted 1 — 별점만 남아 "(텍스트 없음)"으로 들어갈 뻔함) — 사용자 결정으로 셋 다 제외.
+    const bk = card.innerText?.includes('게시중단 요청으로 인해') ? 'temp' : card.innerText?.includes('영구 게시중단') ? 'perm' : card.innerText?.includes('게시자가 삭제한 리뷰') ? 'deleted' : '';
+    if (bk) { window._blocked[no] = bk; continue; }
     if ((card.innerText.match(/리뷰번호/g) || []).length > 1) { window._warn.push('merged:' + no); continue; }
 
     const text = card.innerText || '';
@@ -369,7 +372,7 @@ window._prepare = async function(shopId, name) {
     isLogin: /login|signin|auth/i.test(location.href), noShop: bt.includes('등록된 가게가 없'),
     path: location.host + location.pathname, hidden: document.hidden };
   if (r.isLogin || r.noShop || !r.titleOk) { r.stage = 'login'; return r; }
-  r.filter = await window._applyPeriod('최근 30일', 30);
+  r.filter = await window._applyPeriod('최근 3개월', 92);   // 2026-09-23 변경 — 그전엔 ('최근 30일', 30)
   window._all = {}; window._warn = []; window._blocked = {};
   window.scrollTo(0, 0); await new Promise(s => setTimeout(s, 300));
   r.ready = window._parse(); r.hidden = document.hidden; r.stage = 'ready';
@@ -416,9 +419,9 @@ _ok ? JSON.stringify(await window._prepare('<SHOP_ID>', '<매장명>')) : 'NO_DE
   ```
 - `dismiss.gone === false` → `[WARN] 팝업이 계속 재등장함`만 남기고 계속 진행한다.
 - `stage: 'ready'` → `filter`를 본다. 여기서 두 값을 기억한다. Step 4의 `ok` 판정이 이 둘을 쓴다.
-  - **`filterOk`** — 기간 필터가 실제로 적용됐는가. `filter.ok && filter.filterOk`(다이얼로그 닫힘 + 기간 버튼의 두 날짜가 오늘−30일 ~ 오늘, ±1일)이면 `true`. `labelOk`는 참고용이다 — 라벨 문구만 바뀐 경우를 구분하려는 것이고 판정에는 쓰지 않는다.
+  - **`filterOk`** — 기간 필터가 실제로 적용됐는가. `filter.ok && filter.filterOk`(다이얼로그 닫힘 + 기간 버튼의 두 날짜가 오늘−92일 ~ 오늘, ±1일)이면 `true`. `labelOk`는 참고용이다 — 라벨 문구만 바뀐 경우를 구분하려는 것이고 판정에는 쓰지 않는다.
   - **`expectedTotal`** — 페이지가 말하는 총건수. `0`과 `null`은 **다르다**.
-- `filter.filterOk === false`(또는 `filter.ok === false`) → `window._applyPeriod('최근 30일', 30)`을 다시 호출한다(최대 2회). 단 `dialogOpen: true`(다이얼로그가 열린 채 적용이 안 된 상태)면 버튼을 다시 누르면 닫혀 버리므로 `window._applyPeriod('최근 30일', 30, true)`(열기 생략)로 호출한다. `stage: 'button_not_found'`·`'radio_not_found'`일 때만 `find(query="기간 필터 버튼")` / `find(query="최근 30일 라디오")`로 최후 fallback을 시도하고, ref를 받으면 `computer(action="left_click", ref=...)`로 클릭한 뒤 `_applyPeriod('최근 30일', 30, true)`를 호출한다. 재시도 후에도 `filterOk`가 false → `filterOk = false`, `[WARN] 기간 필터 미확인, 현재 필터로 진행`. 수집은 계속하되 **조회 범위가 불명이므로 이 매장은 `ok: false`다.** 범위를 모르는 결과로 "최근 30일 현황" 엑셀을 동기화하면 조회되지 않은 구간의 행이 지워진다.
+- `filter.filterOk === false`(또는 `filter.ok === false`) → `window._applyPeriod('최근 3개월', 92)`를 다시 호출한다(최대 2회). 단 `dialogOpen: true`(다이얼로그가 열린 채 적용이 안 된 상태)면 버튼을 다시 누르면 닫혀 버리므로 `window._applyPeriod('최근 3개월', 92, true)`(열기 생략)로 호출한다. `stage: 'button_not_found'`·`'radio_not_found'`일 때만 `find(query="기간 필터 버튼")` / `find(query="최근 3개월 라디오")`로 최후 fallback을 시도하고, ref를 받으면 `computer(action="left_click", ref=...)`로 클릭한 뒤 `_applyPeriod('최근 3개월', 92, true)`를 호출한다. 재시도 후에도 `filterOk`가 false → `filterOk = false`, `[WARN] 기간 필터 미확인, 현재 필터로 진행`. 수집은 계속하되 **조회 범위가 불명이므로 이 매장은 `ok: false`다.** 범위를 모르는 결과로 "최근 3개월 현황" 엑셀을 동기화하면 조회되지 않은 구간의 행이 지워진다.
 - `expectedTotal === 0` → 해당 기간 리뷰 없음이 **확인된** 것. Step 3을 건너뛰고 이 매장은 `ok: true`, 0건으로 처리한다.
 - `expectedTotal === null` → 표기 형식이 바뀐 것. 스크롤은 **정상 진행**하고 종료는 바닥 도달로만 판단한다. 0으로 간주해 건너뛰면 안 된다 — 리뷰를 놓치느니 느리게 끝까지 스크롤하는 쪽을 택한다. 다만 **수집률을 검증할 기준이 없으므로 이 매장은 `ok: false`(확인 필요)로 끝난다.** 수집한 저점수는 화면에 그대로 보고하되, 엑셀은 건드리지 않는다.
 - `hidden`은 Step 3 시작 전에 본다(아래). 이 단계의 동작(팝업·필터·정의)은 숨김 상태에서도 정상이다.
@@ -448,7 +451,7 @@ JSON.stringify(await window._scroll(25000, <expectedTotal 또는 null>))
 
 이 한 줄을 **target(= `collected + blocked` ≥ `expectedTotal`)에 도달하거나 `bottom: true`가 `hidden: false`인 채로 연속 2회 나올 때까지** 반복 호출한다. target 도달은 함수가 스스로 멈추므로 반환값의 `collected + blocked`를 `expectedTotal`과 비교하면 된다.
 
-- 실측 기준(2026-09-20 수정 회차): 김치찜 175건(게시중단 1) 83라운드·6.9초(1회), 곱도리 87건 40라운드·3.9초(1회), 참 제육 91건 43라운드·4.2초(1회), 라운드당 83~98ms. 이 범위를 크게 벗어나면 먼저 `throttled`·`avgRoundMs`·`waitCapHits`를 본다.
+- 실측 기준 — 30일(2026-09-20 수정 회차): 김치찜 175건(게시중단 1) 83라운드·6.9초(1회), 곱도리 87건 40라운드·3.9초(1회), 참 제육 91건 43라운드·4.2초(1회), 라운드당 83~98ms. **3개월(2026-09-23)**: 김치찜 702건 351라운드·36.5초(**2회**: 25.0초에 474 → 11.5초에 702), 곱도리 373건 189라운드·20.5초(1회), 참 제육 349건 164라운드·15~18초(1회), 라운드당 92~100ms — 처리율 약 20건/초. 이 범위를 크게 벗어나면 먼저 `throttled`·`avgRoundMs`·`waitCapHits`를 본다.
 - **`throttled === true`가 나오면 즉시 멈추고 사용자에게 요청한다.** 크롬 창이 수집 도중 가려진 것이다. `reason: 'hidden'`은 라운드 시작에 `document.hidden`이 true여서 스크롤하지 않고 돌아온 것(가려진 채 전진한 거리는 직전 라운드 1800px 이하), `reason: 'slow'`는 hidden이 보고되지 않았는데 라운드 3회 연속 600ms를 넘긴 fallback(실측 998/1001/1001ms·1129/1005/990ms)이다. 스크린샷·wait로는 풀리지 않는다. 3-1과 같은 문구로 요청한다:
   > ⚠️ 크롬 창이 다른 창에 가려져 있어(document.hidden) 리뷰 목록이 로드되지 않습니다. 크롬 창을 화면 앞으로 꺼내 주시고(최소화 해제, Claude 앱에 가려지지 않게) '꺼냈어요'라고 알려주세요.
 
@@ -458,10 +461,10 @@ JSON.stringify(await window._scroll(25000, <expectedTotal 또는 null>))
   ```
   되감지 않으면 가려진 동안 렌더링 없이 지나간 구간의 카드를 놓칠 수 있다(2026-09-21 검증 회차 실측: 숨김 호출 2회 연속 뒤 되감기 없이 재개 → 87/89, 가상 리스트의 위쪽 렌더 버퍼 4,487~5,138px). `throttled` 반환은 호출 상한에 세지 않는다.
 - `bottom: true`는 "숨김이 아니고 마지막 라운드가 600ms 이하이며, wiggle 뒤에도 무진전이고 스크롤이 바닥이며 scrollHeight가 변하지 않은" 상태다(실측 3.1초에 반환). **`hidden: false`일 때만, 연속 2회**면 종료한다. 1회로 종료하지 말 것 — 느린 로딩에서 한 배치를 통째로 헛돌 수 있다. `expectedTotal === null`이면 이것이 유일한 종료 근거다. 단 `throttled === true`인 반환은 종료 근거가 아니다. 숨김·감속 상태에서는 렌더링 정지를 바닥과 구분할 수 없어 함수가 바닥 판정 자체를 하지 않는다(2026-09-23 가드).
-- `blocked`는 건너뛴 게시중단 리뷰 수다. `collected + blocked`가 `expectedTotal`과 같으면 수집이 완전한 것이다(실측: 189 + 1 = 190, 173 + 1 = 174). Step 4가 이 합으로 `ok`를 판정한다.
+- `blocked`는 건너뛴 리뷰 수다 — 임시차단(temp)·영구 게시중단(perm)·게시자 삭제(deleted) 세 종류(`window._blocked[리뷰번호]`에 종류가 들어 있다). `collected + blocked`가 `expectedTotal`과 같으면 수집이 완전한 것이다(실측: 189 + 1 = 190, 173 + 1 = 174, 2026-09-23 참 제육 341 + 8 = 349, blockedKinds perm 4·deleted 4). Step 4가 이 합으로 `ok`를 판정한다.
 - **`authExpired === true`가 나오면 즉시 중단한다.** 수집 도중 세션이 끊긴 것이므로 재시도해도 소용없다. 그 매장은 `ok: false`이고, 부분 수집분으로 엑셀을 동기화하면 안 된다. 사용자에게:
   > ⚠️ [매장명] 수집 도중 로그인이 풀렸습니다. 크롬에서 다시 로그인한 뒤 '완료했어요'라고 알려주시면 해당 매장만 다시 수집합니다.
-- 최대 4회까지만 호출한다(`throttled` 반환 제외). 그 이상은 무한 루프로 본다. 25초 배치 하나가 약 270라운드·480,000px ≈ 카드 500건을 훑으므로 30일 리뷰는 보통 1회, 많아도 2회 + 바닥 확인으로 끝난다.
+- 최대 4회까지만 호출한다(`throttled` 반환 제외). 그 이상은 무한 루프로 본다. 25초 배치 하나가 약 270라운드·480,000px ≈ 카드 500건을 훑으므로 3개월 리뷰(2026-09-23 실측 전체(N): 김치찜 702·곱도리 373·참 제육 6개월 915 기준 450~660 추정)는 김치찜 2회, 나머지 1~2회 + 바닥 확인으로 끝난다. 4회(약 2,000건)는 6개월치도 담는 여유다.
 - `hidden === true`인 반환은 `throttled: true, reason: 'hidden'`뿐이어야 한다 — 라운드 시작마다 `document.hidden`을 보므로 숨김 상태에서 `bottom: true`나 예산 소진으로 돌아오지 않는다(2026-09-23. 그 전 코드는 숨김 첫 라운드가 600ms 미만이면 바닥 판정이 먼저 걸려 가짜 `bottom: true`가 나왔다 — 2026-09-21 검증 회차 3회 중 1회). 만약 `hidden: true`인데 `throttled: false`가 오면 라운드 사이에 창이 가려진 것이니 그 반환은 종료 근거로 쓰지 말고 `hidden`을 다시 확인한 뒤 되감기·재호출한다. **스크린샷·wait로 "깨우기"를 시도하지 않는다** — 2026-09-09 실측에서 둘 다 `hidden`을 풀지 못했고 프레임 1장만 강제해 카드 몇 개가 더 붙을 뿐이다.
 
 ---
@@ -491,11 +494,15 @@ else if (all.length > 0 && parseFail === all.length)  { ok = false; reason = '�
 else if (parseFail > all.length * 0.1)                { ok = false; reason = `별점 파싱 실패 ${parseFail}/${all.length} — 10% 초과`; }
 if (ok && sum > ET) warn = `수집 ${all.length} + 게시중단 ${blocked} > 전체 ${ET} — 수집 중 신규 등록 추정`;   // ok 유지, 상태 열에 경고
 
-JSON.stringify({ storeName: '<매장명>', ok, reason, warn,
+// 결과는 window._out4에 보관하고, 950자 이하일 때만 그대로 돌려준다. 넘으면 'LEN:n'만 돌려주고 아래 "긴 결과 읽기"로 900자씩 나눠 읽는다.
+// (반환값 1,000자 절단 대응. 2026-09-23 실측: 3개월 참 제육 저점수 8건 = 1,267자 → 잘림. 예전 Blob+get_page_text 폴백은 같은 날 blob: URL이 도구에서 거부돼 폐기)
+window._out4 = JSON.stringify({ storeName: '<매장명>', ok, reason, warn,
   expectedTotal: ET, collected: all.length, total: all.length, authExpired: AUTH,
-  blocked, countMatch: ET === null ? null : (sum === ET),
+  blocked, blockedKinds: Object.values(window._blocked).reduce((o, k) => (o[k] = (o[k] || 0) + 1, o), {}),
+  countMatch: ET === null ? null : (sum === ET),
   dist: [1,2,3,4,5].map(n => all.filter(r => r.stars === n).length),
-  parseFail, warns: window._warn.slice(0, 8), reviews: out })
+  parseFail, warns: window._warn.slice(0, 8), reviews: out });
+window._out4.length <= 950 ? window._out4 : 'LEN:' + window._out4.length
 ```
 
 **판정**
@@ -509,14 +516,13 @@ JSON.stringify({ storeName: '<매장명>', ok, reason, warn,
 
 수집 단계에서는 모든 별점을 모으고 **여기서만** 저점수로 거른다. 수집 단계에서 미리 별점으로 걸러내면 페이지의 "전체(N)"과 비교해 스크롤 종료를 판단할 근거가 사라져, 하단의 저점수 리뷰를 놓칠 수 있다. 별점 파싱에 실패한 건도 저점수일 가능성을 배제할 수 없으므로 함께 보존한다.
 
-저점수는 매우 희소해서(김치찜 최근 6개월 기준 1점 1건·2점 1건·3점 4건 — 2026-09-09 재확인; 최근 30일은 2026-09-09 3매장 0건, 2026-09-20 참 제육 1건) 이 JSON은 보통 아주 짧다. 반환값을 그대로 쓰면 되고 Blob·탭 이동은 필요 없다.
+저점수는 희소하지만(30일 기준 2026-09-09 3매장 0건, 2026-09-20 참 제육 1건) 3개월로 넓히면 매장당 1~8건이 나온다(2026-09-23 실측: 김치찜 1·곱도리 2·참 제육 8). 반환값은 1,000자에서 잘리므로 저점수 5건 안팎부터 `LEN:n`으로 돌아온다 — 정상이다.
 
-만약 반환값 끝에 `[TRUNCATED]` 표식이 붙어 잘렸으면(약 1,000자 초과) 그때만 폴백한다:
+**긴 결과 읽기** — 반환값이 `LEN:n`이면 `window._out4`를 900자씩 나눠 읽는다. `ceil(n / 900)`개의 실행을 **`browser_batch` 1회**로 묶는다(2026-09-23 실측: 1,456자를 900·556자 두 조각으로 온전히 수신, 1,100자 한 조각은 1,000자에서 `[TRUNCATED]`). 배치 결과는 `[javascript_tool:javascript_exec]` 표식으로 조각이 구분되니 그 사이 문자열을 순서대로 이어 붙인다.
 ```javascript
-const b = new Blob([JSON.stringify({storeName:'<매장명>', reviews: out})], {type:'text/plain;charset=utf-8'});
-location.href = URL.createObjectURL(b); 'go'
+window._out4.substring(0, 900)      // 이어서 substring(900, 1800), substring(1800, 2700) … 을 같은 배치에
 ```
-이어서 `get_page_text(tabId=<탭ID>)`로 전문을 읽는다. 함정 세 가지: (1) `charset=utf-8`을 빼면 한글이 복구 불가능하게 깨진다. (2) 탭을 이동시키는 순간 `window._all`이 사라지므로 **그 매장 수집이 완전히 끝난 뒤에만** 실행한다. (3) 다른 탭에서 blob URL로 `navigate()`하는 방식은 동작하지 않는다 — 반드시 수집한 그 탭 자신을 이동시켜야 한다.
+이어 붙인 문자열이 JSON으로 파싱되는지는 5-1의 `JSON_OK` 확인이 잡는다. **탭을 이동시키지 않는다** — 예전 Blob + `get_page_text` 폴백은 `blob:` URL이 브라우저 도구에서 `Can't interact with browser-internal or unparseable URLs`로 거부돼 쓸 수 없고(2026-09-23 실측), 이동하는 순간 `window._all`·`window._out4`도 사라진다. 되살리지 말 것.
 
 매장별 결과를 모아두고 다음 매장으로 넘어간다. **엑셀 저장은 3개 매장을 다 모은 뒤 한 번만 한다.**
 
@@ -534,9 +540,10 @@ location.href = URL.createObjectURL(b); 'go'
 mkdir -p $HOME/skillwork && cat > $HOME/skillwork/baemin.json << 'ENDJSON'
 [{"storeName":"...","ok":true,"reason":"","expectedTotal":0,"collected":0,"parseFail":0,"reviews":[]}, ...]
 ENDJSON
+python3 -c "import json; d=json.load(open('$HOME/skillwork/baemin.json', encoding='utf-8')); print('JSON_OK', len(d), [len(s.get('reviews', [])) for s in d])"
 ```
 
-`$HOME/skillwork`는 사용자에게 보이지 않는 작업 공간이다(세션이 끝나면 사라진다 — 백업을 여기 두지 않는다). 사용자 폴더에 임시 파일을 만들지 않는다.
+`JSON_OK`가 안 찍히면 Step 4의 긴 결과 조각을 잘못 이어 붙인 것이다 — 그 매장만 다시 읽는다. `$HOME/skillwork`는 사용자에게 보이지 않는 작업 공간이다(세션이 끝나면 사라진다 — 백업을 여기 두지 않는다). 사용자 폴더에 임시 파일을 만들지 않는다.
 
 ### 5-2. 저장 스크립트
 
@@ -546,7 +553,7 @@ ENDJSON
 
 `ok !== true`인 매장의 행은 **읽지도 쓰지도 않는다.** 삭제도, 신규 추가도 하지 않고 그대로 둔다. 정상 수집된 매장이 하나도 없으면 파일을 열기만 하고 저장 없이 종료한다.
 
-조회 기간 밖 과거 리뷰가 삭제되는 것은 의도된 동작이며, 이 엑셀은 "최근 30일 현황"이다. 되돌리기는 Step 0이 남긴 `backup/` 사본으로 한다.
+조회 기간 밖 과거 리뷰가 삭제되는 것은 의도된 동작이며, 이 엑셀은 "최근 3개월 현황"이다(2026-09-23 변경 — 그전엔 30일). 30일→3개월로 넓힌 뒤 **첫 실행**에서는 31~92일 전 저점수가 한꺼번에 "신규"로 들어온다 — 예상된 1회성 동작이다. 되돌리기는 Step 0이 남긴 `backup/` 사본으로 한다.
 
 저장 뒤 스크립트가 **파일을 다시 열어** 행수와 (매장명, 리뷰번호) 집합이 `kept + new`와 같은지 확인한다(`verified`). 점검·검증 회차에서는 두 번째 인자를 **엑셀 사본 경로**로 바꿔 돌리면(dry-run) 실제 파일을 건드리지 않고 같은 검증을 할 수 있다.
 
@@ -702,7 +709,7 @@ tabs_close_mcp(tabId=<탭ID>)
 ## 최종 보고 형식
 
 ```
-조회 기간: YYYY-MM-DD ~ YYYY-MM-DD (최근 30일)
+조회 기간: YYYY-MM-DD ~ YYYY-MM-DD (최근 3개월)
 
 | 매장 | 전체(N) | 수집 | 게시중단 | 저점수 | 신규 | 별점분포(1~5) | 상태 |
 |---|---|---|---|---|---|---|---|
@@ -731,7 +738,7 @@ tabs_close_mcp(tabId=<탭ID>)
 | Step 2 결과가 `[BLOCKED: Cookie/query string data]` | 로그인 리다이렉트(`biz-member.baemin.com/login?returnUrl=…&__ts=…`) 등으로 URL에 쿼리스트링이 생겼는데 반환값에 URL이 들어감 | 로그인 필요로 간주하고 로그인 요청. 반환 JSON에 `location.href`를 넣지 말 것(`path`만). 2026-09-20 실측 |
 | Step 2 결과가 `NO_DEFS` | 재주입 키 `SID`가 다르거나(다른 세션) 저장이 안 됨 | 그 매장은 2-A 전체판으로 실행 |
 | `filterOk: false`인데 `labelOk: true` | 다이얼로그가 열린 채 남아 라벨은 보이지만 적용이 안 됨(2026-09-20 재현) | 적용된 것이 아니다. `_applyPeriod` 재시도. 되돌려서 `labelOk`로 판정하지 말 것 |
-| `filterOk: false`, `range`가 오늘−30일~오늘과 하루 차이 | 자정 경계 | ±1일은 통과 조건이다. 이틀 이상 벌어지면 필터 미적용 |
+| `filterOk: false`, `range`가 오늘−92일~오늘과 하루 차이 | 자정 경계 | ±1일은 통과 조건이다. 이틀 이상 벌어지면 필터 미적용(다른 기간이 선택된 것 — 30일이면 62일, 6개월이면 91일 차이) |
 | 별점이 44 같은 이상값 | SVG 색상 세기 fallback이 병합 카드나 새 노란 아이콘을 세었다 | 현재 사이트에는 `aria-label`이 없어 **색상 경로가 실제 주 경로**다(2026-09-09 381/381, 2026-09-20 349/349). 이상값은 `c <= 5` 가드로 버려져 `star_fail`로 잡힌다. `merged` 경고와 카드 안 svg 목록(별 5개 16px + 아이콘 12px)을 확인할 것. aria-label 경로는 사이트가 되돌아올 때 대비용이므로 지우지 말 것 |
 | 리뷰번호는 맞는데 내용이 뒤섞임 | 카드 경계 오탐 | `ReviewContent-module` 경계 실패 → `no_card`/`merged` 경고 확인 |
 | 리뷰내용에 본문이 두 번 들어감 / `보이는 리뷰입니다.`가 섞임 | 파트너전용 라벨 줄을 비공개 구간 머리말로 오인 | `PK_LABEL` 플래그 경로가 살아 있는지 확인(2026-09-20 결함 3). `[파트너전용] 본문` 한 번만 들어가야 정상 |
@@ -741,7 +748,7 @@ tabs_close_mcp(tabId=<탭ID>)
 | 팝업 WARN이 뜨는데 실제 팝업은 없음 | 우측 하단 챗봇 위젯을 팝업으로 오탐 | `isChatbot` 제외가 살아있는지 확인 |
 | `Failed to fetch (self-api.baemin.com)` | 크로스 오리진 차단 (정상) | API 경로를 되살리려 하지 말 것. 위 "설계 근거" 참고 |
 | CDP 타임아웃 45초 | 배치 예산이 45초에 근접 | `_scroll` 예산을 25초 이하로 유지 |
-| 결과 끝에 `[TRUNCATED]` | `javascript_tool` 반환 약 1,000자 제한 | Step 4의 Blob 폴백. 수집 결과 JSON은 보통 그보다 짧다 |
+| Step 4 반환이 `LEN:n` / 결과 끝에 `[TRUNCATED]` | `javascript_tool` 반환 1,000자 제한 — 3개월은 저점수 5건 안팎부터 넘는다 | Step 4의 "긴 결과 읽기"(`window._out4.substring` 900자씩, `browser_batch` 1회). Blob·`get_page_text` 폴백은 폐기됨(blob: URL 거부, 2026-09-23) |
 | `throttled: true, reason: 'hidden'` (rounds 0~N, 직전 라운드까지만 전진) | 라운드 시작에 `document.hidden`이 true — 크롬 창이 가려짐(2026-09-23 게이트) | 스크린샷·wait로는 안 풀린다. 사용자에게 크롬 창을 앞으로 꺼내달라고 요청하고 응답 후 `hidden === false` 확인, `window.scrollTo(0, lastGainY)`로 되감은 뒤 같은 `_scroll`을 이어서 호출 |
 | 라운드가 ~1000ms로 느려짐 (`throttled: true, reason: 'slow'`, `avgRoundMs` ≈ 870~1000) | **감속** — hidden이 보고되지 않은 채 백그라운드 타이머 클램프로 `setTimeout`이 1초에 깨어남(실측 998/1001/1001ms, 1129/1005/990ms). 적응형 대기의 25ms 폴도 같이 1초가 된다. 숨김 게이트의 fallback 경로 | 위와 같음 — 창을 꺼내달라고 요청, `hidden === false` 확인, `lastGainY`로 되감고 이어서 호출 |
 | `bottom: true`인데 `hidden: true` | 2026-09-23 이전 코드: 숨김 첫 라운드가 600ms 미만이면 throttled 검사가 불성립하고, 렌더링 정지(scrollY 클램프·scrollHeight 고정)로 바닥 판정이 먼저 걸림(2026-09-21 검증 회차 3회 중 1회, 46/85) | 현재 코드에서는 나오지 않아야 한다(라운드 시작 hidden 게이트 + 바닥 판정 가드 `!document.hidden && 마지막 라운드 ≤ 600ms`). 나오면 되돌아간 것 — 종료 근거로 쓰지 말고 창을 꺼내달라고 요청한 뒤 `lastGainY`로 되감고 재호출 |
@@ -758,5 +765,5 @@ tabs_close_mcp(tabId=<탭ID>)
 | `인증만료 — 수집 도중 세션 종료` | 스크롤 중 세션 만료 | 그 매장은 실패 처리되어 엑셀이 보존된다. 재로그인 후 그 매장만 재수집 |
 | `누락 의심 — 수집 N + 게시중단 M < 전체 K` | 스크롤이 끝까지 못 갔거나, 전체(N)에 포함되는 다른 비노출 리뷰 유형 | 재실행. 반복되면 배민 "차단" 탭 숫자와 대조(실측: `차단(1)` = blocked 1) |
 | `별점 파싱 실패 N/M — 10% 초과` (ok:false) | 별점 UI가 바뀌어 일부만 읽힘 | 카드 안 svg·aria-label·img alt 구조를 다시 확인. 10% 이하면 `[별점확인필요]`로 보존하며 진행 |
-| 게시중단된 리뷰가 결과에 안 보임 | 의도적 제외 (우리가 신고해 내린 리뷰) | 정상. `blocked` 건수로 보고되며 배민 "차단" 탭 숫자와 같아야 한다(실측 2026-09-09: blocked 1 = `차단(1)`). 30일 차단이 풀리면 정상 수집 대상으로 돌아온다 |
+| 게시중단·게시자 삭제 리뷰가 결과에 안 보임 | 의도적 제외 — 우리가 신고해 내린 리뷰(임시차단 temp·영구 게시중단 perm)와 손님이 지운 리뷰(deleted). 2026-09-23 사용자 결정 | 정상. `blocked` 건수·`blockedKinds`로 보고된다. 배민 "차단" 탭 숫자는 temp+perm과 같아야 한다(실측 2026-09-09: blocked 1 = `차단(1)`; deleted는 차단 탭에 없다). 30일 임시차단이 풀리면 정상 수집 대상으로 돌아온다 |
 | `수집 + 게시중단 > 전체` (warn) | 전체(N)을 읽은 뒤 스크롤 중 새 리뷰가 달림 | `ok` 유지, 상태 열에 경고만. 다음 실행에서 사라진다 |
