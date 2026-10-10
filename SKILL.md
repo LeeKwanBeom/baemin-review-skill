@@ -1,5 +1,5 @@
 ---
-name: baemin-review
+name: "baemin-review"
 description: "배달의민족(배민) 셀프서비스에서 저점수(1~3점) 리뷰를 자동으로 수집해 엑셀에 저장하는 스킬. 사용자가 \"배민 리뷰 조회\", \"배민 리뷰 확인\", \"저점수 리뷰 체크\", \"배민 리뷰 해줘\", \"배민 스킬\" 등 배민 리뷰와 관련된 요청을 할 때 반드시 이 스킬을 사용할 것. 크롬으로 배민 셀프서비스에 접속해 최근 3개월 리뷰를 DOM에서 수집하고, 저점수만 골라 \"전체\" 단일 시트 엑셀에 저장한다."
 ---
 
@@ -49,23 +49,23 @@ URL: `https://self.baemin.com/shops/<shopId>/reviews`
 `device_bash`로 폴더·파이썬·잠금파일을 확인한다. 세 검사는 **각각 따로** 출력한다 — 예전의 `A && B && C && echo LOCKED || echo UNLOCKED` 한 줄은 폴더나 openpyxl이 없어도 마지막 `|| echo UNLOCKED`가 찍혀 환경 실패가 통과로 보였다(2026-09-09 재현). 되돌리지 말 것.
 
 ```bash
-[ -d "$HOME/mnt/claude" ] && echo FOLDER_OK || echo NO_FOLDER
+[ -d "$HOME/mnt/review" ] && echo FOLDER_OK || echo NO_FOLDER
 python3 -c "import openpyxl" 2>/dev/null && echo OPENPYXL_OK || echo NO_OPENPYXL
-[ -e "$HOME/mnt/claude/~\$배민_저점수리뷰.xlsx" ] && echo LOCKED || echo UNLOCKED
+[ -e "$HOME/mnt/review/~\$배민_저점수리뷰.xlsx" ] && echo LOCKED || echo UNLOCKED
 ```
 
 - 세 줄이 `FOLDER_OK` · `OPENPYXL_OK` · `UNLOCKED` 이어야 정상이다. 하나라도 빠지면 아래를 따른다.
-- `NO_FOLDER` → 폴더가 연결되지 않은 것. 사용자에게 `claude` 폴더 연결을 요청한다. 수집은 진행하되 Step 5는 실행하지 않는다.
+- `NO_FOLDER` → 폴더가 연결되지 않은 것. 사용자에게 `review` 폴더 연결을 요청한다. 수집은 진행하되 Step 5는 실행하지 않는다.
 - `NO_OPENPYXL` → 사용자 PC에 openpyxl이 없다. `pip install openpyxl`을 시도하고 실패하면 Step 5를 건너뛴다.
 - `LOCKED` → 사용자에게 엑셀을 닫아달라고 요청하고 재확인한다.
 - `device_bash` 자체가 실패하면 → 사용자에게 "PC에 연결되어 있지 않아 엑셀 저장을 할 수 없다"고 알리고, 수집은 진행하되 결과를 채팅에 표로만 출력한다.
 
-엑셀 경로는 `$HOME/mnt/claude/배민_저점수리뷰.xlsx` 이다.
+엑셀 경로는 `$HOME/mnt/review/배민_저점수리뷰.xlsx` 이다.
 
 `UNLOCKED`면 **실행 전 백업**을 사용자 폴더 안에 남긴다. 이 스킬은 스냅샷 동기화라 Step 5가 기존 행을 지우므로 백업이 유일한 되돌리기 수단이다. `$HOME/skillwork`나 `$HOME` 아래는 세션별 홈이라 세션이 끝나면 접근할 수 없으니(2026-09-09 실측) 거기에 두지 말 것.
 
 ```bash
-mkdir -p "$HOME/mnt/claude/backup" && if [ -f "$HOME/mnt/claude/배민_저점수리뷰.xlsx" ]; then cp "$HOME/mnt/claude/배민_저점수리뷰.xlsx" "$HOME/mnt/claude/backup/배민_저점수리뷰_$(date +%Y%m%d_%H%M%S).xlsx" && echo "백업 완료: $(ls -t "$HOME/mnt/claude/backup/" | head -1)" || echo "백업 실패 — 중단하고 사용자에게 알린다"; else echo "백업 대상 없음(첫 실행)"; fi
+mkdir -p "$HOME/mnt/review/backup" && if [ -f "$HOME/mnt/review/배민_저점수리뷰.xlsx" ]; then cp "$HOME/mnt/review/배민_저점수리뷰.xlsx" "$HOME/mnt/review/backup/배민_저점수리뷰_$(date +%Y%m%d_%H%M%S).xlsx" && echo "백업 완료: $(ls -t "$HOME/mnt/review/backup/" | head -1)" || echo "백업 실패 — 중단하고 사용자에게 알린다"; else echo "백업 대상 없음(첫 실행)"; fi
 ```
 
 백업은 `backup/` 폴더에 회차마다 쌓인다. 정리는 사용자 몫이며 스킬이 지우지 않는다. `백업 실패`가 찍히면 Step 5로 가지 않는다.
@@ -365,10 +365,18 @@ window._scroll = async function(budgetMs = 25000, target = null, step = 1800) {
 // ===== 준비 절차 =====
 // 반환 JSON에 URL(쿼리 포함)을 담지 않는다 — 로그인 리다이렉트 URL의 쿼리스트링 때문에 결과 전체가 [BLOCKED]로 차단된다(2026-09-20 결함 2).
 // shopIdOk는 pathname으로 본다 — 로그인 페이지의 returnUrl 안에도 shopId가 들어 있어 href 검색은 거기서도 true가 된다.
+// 렌더 대기(2026-10-10): navigate 직후에는 본문이 비어 있다(실측 innerText 0자 → 약 1초 뒤 매장명). 그때 재면 titleOk:false → 가짜 stage:'login'
+// (review-all 리허설 3/3, 첫 실사용 1/3). 매장명 · "등록된 가게가 없" · 로그인 주소 중 하나가 보일 때까지 기다린 뒤 팝업 닫기·판정을 한다(상한 8초).
+// 계정 불일치·로그아웃은 그 표시가 보이는 즉시 빠져나가므로 늦어지지 않는다(실측 계정 불일치 약 1초). 상한에 걸리면 아래 판정이 그대로 stage:'login'을 낸다.
 window._prepare = async function(shopId, name) {
+  const tW = performance.now();
+  const seen = () => { const t = document.body?.innerText || '';
+    return t.includes(name) || t.includes('등록된 가게가 없') || /login|signin|auth/i.test(location.href); };
+  while (!seen() && performance.now() - tW < 8000) await new Promise(s => setTimeout(s, 200));
+  const renderWaitMs = Math.round(performance.now() - tW);
   const d = await window._dismissAll();
   const bt = document.body.innerText;
-  const r = { dismiss: d, shopIdOk: location.pathname.includes('/shops/' + shopId + '/'), titleOk: bt.includes(name),
+  const r = { renderWaitMs, dismiss: d, shopIdOk: location.pathname.includes('/shops/' + shopId + '/'), titleOk: bt.includes(name),
     isLogin: /login|signin|auth/i.test(location.href), noShop: bt.includes('등록된 가게가 없'),
     path: location.host + location.pathname, hidden: document.hidden };
   if (r.isLogin || r.noShop || !r.titleOk) { r.stage = 'login'; return r; }
@@ -407,7 +415,7 @@ _ok ? JSON.stringify(await window._prepare('<SHOP_ID>', '<매장명>')) : 'NO_DE
 **판정**
 
 - 결과가 `[BLOCKED:`로 시작하면 → 로그인 리다이렉트 등으로 URL에 쿼리스트링이 생긴 것이다. **로그인 필요로 간주**하고 아래 로그인 문구로 요청한다. (정상 경로에서는 반환값에 URL이 없어 차단되지 않는다.)
-- `stage: 'login'` (`isLogin` 또는 `noShop` 또는 `titleOk === false`) → **이 매장만 중단**하고 다른 매장은 계속한다. 사용자에게:
+- `stage: 'login'` (`isLogin` 또는 `noShop` 또는 `titleOk === false`) → **이 매장만 중단**하고 다른 매장은 계속한다. `_prepare`가 렌더를 기다린 뒤 잰 값이다(`renderWaitMs`, 상한 8초 — 2026-10-10). 사용자에게:
   > ⚠️ [매장명] 조회에 로그인이 필요합니다. 크롬에서 계정<A 또는 B>로 로그인 후 '완료했어요'라고 알려주세요.
 
   사용자 확인 후 이 매장의 Step 1(navigate)부터 재시도한다. 재시도해도 실패하면 **그 매장을 빼지 말고** 아래 형태로 결과 배열에 넣는다. 그래야 저장 단계가 그 매장 행을 보존한다.
@@ -558,7 +566,7 @@ python3 -c "import json; d=json.load(open('$HOME/skillwork/baemin.json', encodin
 저장 뒤 스크립트가 **파일을 다시 열어** 행수와 (매장명, 리뷰번호) 집합이 `kept + new`와 같은지 확인한다(`verified`). 점검·검증 회차에서는 두 번째 인자를 **엑셀 사본 경로**로 바꿔 돌리면(dry-run) 실제 파일을 건드리지 않고 같은 검증을 할 수 있다.
 
 ```bash
-python3 - "$HOME/skillwork/baemin.json" "$HOME/mnt/claude/배민_저점수리뷰.xlsx" << 'ENDPY'
+python3 - "$HOME/skillwork/baemin.json" "$HOME/mnt/review/배민_저점수리뷰.xlsx" << 'ENDPY'
 import json, sys, re, os
 import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -668,7 +676,7 @@ for i, row in enumerate(data, start=2):
 try:
     wb.save(XLSX); saved = XLSX
 except Exception as e:
-    saved = os.path.expanduser('~/mnt/claude/backup/배민_저점수리뷰_backup.xlsx')
+    saved = os.path.expanduser('~/mnt/review/backup/배민_저점수리뷰_backup.xlsx')
     os.makedirs(os.path.dirname(saved), exist_ok=True)
     wb.save(saved)
     print(f'[WARN] 원본 저장 실패 ({e}) → {saved}', file=sys.stderr)
@@ -737,6 +745,7 @@ tabs_close_mcp(tabId=<탭ID>)
 | 리뷰가 있는데 스크롤 없이 종료 | "전체(N)" 표기 변경으로 파싱 실패 | `expectedTotal`을 0이 아닌 `null`로 두고 바닥 도달로만 종료 |
 | Step 2 결과가 `[BLOCKED: Cookie/query string data]` | 로그인 리다이렉트(`biz-member.baemin.com/login?returnUrl=…&__ts=…`) 등으로 URL에 쿼리스트링이 생겼는데 반환값에 URL이 들어감 | 로그인 필요로 간주하고 로그인 요청. 반환 JSON에 `location.href`를 넣지 말 것(`path`만). 2026-09-20 실측 |
 | Step 2 결과가 `NO_DEFS` | 재주입 키 `SID`가 다르거나(다른 세션) 저장이 안 됨 | 그 매장은 2-A 전체판으로 실행 |
+| 로그인돼 있는데 `stage: 'login'` (`titleOk: false`, `isLogin`·`noShop` false) | 2026-10-10 이전 코드: navigate 직후 본문이 비어 있을 때(실측 innerText 0자) 재서 매장명을 못 봄 — review-all 리허설 3/3, 첫 실사용 1/3 | 현재 코드는 `_prepare` 맨 앞에서 매장명·"등록된 가게가 없"·로그인 주소를 최대 8초 기다린다. `renderWaitMs`가 8000 근처인데도 이렇게 나오면 매장명 표기가 바뀐 것 — 본문에서 매장명을 확인. 렌더 대기를 빼지 말 것 |
 | `filterOk: false`인데 `labelOk: true` | 다이얼로그가 열린 채 남아 라벨은 보이지만 적용이 안 됨(2026-09-20 재현) | 적용된 것이 아니다. `_applyPeriod` 재시도. 되돌려서 `labelOk`로 판정하지 말 것 |
 | `filterOk: false`, `range`가 오늘−92일~오늘과 하루 차이 | 자정 경계 | ±1일은 통과 조건이다. 이틀 이상 벌어지면 필터 미적용(다른 기간이 선택된 것 — 30일이면 62일, 6개월이면 91일 차이) |
 | 별점이 44 같은 이상값 | SVG 색상 세기 fallback이 병합 카드나 새 노란 아이콘을 세었다 | 현재 사이트에는 `aria-label`이 없어 **색상 경로가 실제 주 경로**다(2026-09-09 381/381, 2026-09-20 349/349). 이상값은 `c <= 5` 가드로 버려져 `star_fail`로 잡힌다. `merged` 경고와 카드 안 svg 목록(별 5개 16px + 아이콘 12px)을 확인할 것. aria-label 경로는 사이트가 되돌아올 때 대비용이므로 지우지 말 것 |
