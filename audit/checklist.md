@@ -10,7 +10,7 @@
 성립하지 않는다(1회차에서 확인). 자세한 순서는 아래 [마무리 — 기준선 갱신] 절을
 그대로 따른다 — 이 머리말과 그 절은 항상 같은 말을 해야 한다.
 
-버전: v6 (2026-09-23 수정 회차 2 — 검증 회차(2026-09-21) 결과 처리: "되돌리면 안 되는 것" 표의 throttled 행에 라운드 시작 hidden 게이트·바닥 판정 가드·`lastGainY` 되감기 반영, [실행 준비 조건]의 숨김 계측에 되감기·2회 연속 조건 추가. v5: 2026-09-20 2회차 수정 회차 — 개정안 1~13 채택: 속도 기준선 표·벽시계 분해 상시화(실험 절은 속도 목표 회차만), localStorage 집합 보관, audit-only 계측 허용, 사본 dry-run, 바이트 수 금지·행 번호 기준 명시, 문구 교체는 파일 전체 검색, C 항목 BLOCKED/TRUNCATED, hidden 재발 경고, F 실험 절차, 배너 격하, 파트너전용 라벨 대조, 의도된 동작에 칩 기록 추가, "되돌리면 안 되는 것" 표 갱신. v4: 2026-09-09 교차 정정 회차 — 쿠팡 스킬 점검 개정안 이관: [시작 전 확인 ③]의 백업 위치를 `$HOME/skillwork` → `$HOME/mnt/claude/backup/` 로 바꾸고 사유 명시. 326행 skillwork 는 임시 작업 공간이라 유지. v3: 2026-09-09 정정 회차 — 머리말의 "같은 커밋으로" 를 [마무리] 절의 2회 커밋 규칙과 일치시킴, [판정 기준]에 "행 번호 대신 절 이름·함수명" 항목 추가. v2: 1회차 점검의 개정안 10건 + "PC에서 push" 절차 반영. v1: 같은 날 saero·hometax 점검표를 이 스킬 구조에 맞춰 옮김)
+버전: v7 (2026-10-10 렌더 대기 회차 — "되돌리면 안 되는 것"에 `_prepare` 렌더 대기 행 추가, 현재 절차의 사용자 폴더 경로 `$HOME/mnt/claude` → `$HOME/mnt/review`(설치본 2026-10-10 업로드에 맞춤, 5곳). v6: 2026-09-23 수정 회차 2 — 검증 회차(2026-09-21) 결과 처리: "되돌리면 안 되는 것" 표의 throttled 행에 라운드 시작 hidden 게이트·바닥 판정 가드·`lastGainY` 되감기 반영, [실행 준비 조건]의 숨김 계측에 되감기·2회 연속 조건 추가. v5: 2026-09-20 2회차 수정 회차 — 개정안 1~13 채택: 속도 기준선 표·벽시계 분해 상시화(실험 절은 속도 목표 회차만), localStorage 집합 보관, audit-only 계측 허용, 사본 dry-run, 바이트 수 금지·행 번호 기준 명시, 문구 교체는 파일 전체 검색, C 항목 BLOCKED/TRUNCATED, hidden 재발 경고, F 실험 절차, 배너 격하, 파트너전용 라벨 대조, 의도된 동작에 칩 기록 추가, "되돌리면 안 되는 것" 표 갱신. v4: 2026-09-09 교차 정정 회차 — 쿠팡 스킬 점검 개정안 이관: [시작 전 확인 ③]의 백업 위치를 `$HOME/skillwork` → `$HOME/mnt/claude/backup/` 로 바꾸고 사유 명시. 326행 skillwork 는 임시 작업 공간이라 유지. v3: 2026-09-09 정정 회차 — 머리말의 "같은 커밋으로" 를 [마무리] 절의 2회 커밋 규칙과 일치시킴, [판정 기준]에 "행 번호 대신 절 이름·함수명" 항목 추가. v2: 1회차 점검의 개정안 10건 + "PC에서 push" 절차 반영. v1: 같은 날 saero·hometax 점검표를 이 스킬 구조에 맞춰 옮김)
 
 ---
 
@@ -56,7 +56,7 @@ md5sum baemin-review-skill/SKILL.md "<스킬 호출 헤더의 Base directory>/SK
 ```
 
 - **md5 동일** → 정상. 그대로 진행한다.
-- 사용자 폴더(`$HOME/mnt/claude`)의 `baemin-review.skill` 패키지 파일도 최신인지 본다 — 2026-09-09에는 7/26자 패키지가 남아 있어 9/6 개정 이전 것으로 보였다. 오래됐으면 "재패키징 시 이 파일을 갱신할 것"으로 보고에 적는다(실행에는 영향 없음).
+- 사용자 폴더(`$HOME/mnt/review`)의 `baemin-review.skill` 패키지 파일도 최신인지 본다 — 2026-09-09에는 7/26자 패키지가 남아 있어 9/6 개정 이전 것으로 보였다. 오래됐으면 "재패키징 시 이 파일을 갱신할 것"으로 보고에 적는다(실행에는 영향 없음).
 - **다름** → 어느 쪽이 최신인지 판정하고 **그 사실부터 보고해라.**
   저장소가 최신이면 "재업로드가 안 된 것"이고, 설치본이 최신이면
   "저장소에 push 가 안 된 것"이다. 둘은 대응이 다르다.
@@ -72,11 +72,11 @@ md5sum baemin-review-skill/SKILL.md "<스킬 호출 헤더의 Base directory>/SK
 그러므로 이 점검은 **실제 1회 실행을 포함한다.** 다만 조건이 있다.
 
 - **엑셀을 먼저 백업해라.** 이 스킬은 스냅샷 동기화라 실행이 기존 행을 지운다.
-  백업은 사용자 폴더 아래 `$HOME/mnt/claude/backup/` 에 둔다. 없을 수 있으니 먼저 만든다.
+  백업은 사용자 폴더 아래 `$HOME/mnt/review/backup/` 에 둔다. 없을 수 있으니 먼저 만든다.
   **`$HOME/skillwork` 에 두지 마라 — 세션별 홈이라 세션 종료 시 접근 불가(2026-09-09 쿠팡 점검 실측).
   세션이 끝나면 못 꺼내므로 백업 구실을 못 한다.**
   ```bash
-  mkdir -p "$HOME/mnt/claude/backup" && cp "$HOME/mnt/claude/배민_저점수리뷰.xlsx" "$HOME/mnt/claude/backup/배민_백업_$(date +%Y%m%d_%H%M).xlsx"
+  mkdir -p "$HOME/mnt/review/backup" && cp "$HOME/mnt/review/배민_저점수리뷰.xlsx" "$HOME/mnt/review/backup/배민_백업_$(date +%Y%m%d_%H%M).xlsx"
   ```
 - **Step 5(엑셀 저장)는 실제 파일 대상으로는 실행하지 마라. 엑셀 사본 dry-run 은 한다.**
   Step 0~4 를 돌린 뒤 5-1 JSON 을 기록하고 5-2 저장 스크립트의 두 번째 인자를 **사본 경로**
@@ -177,6 +177,7 @@ md5sum baemin-review-skill/SKILL.md "<스킬 호출 헤더의 Base directory>/SK
 | `expectedTotal` 의 `0` 과 `null` 구분 | `\|\| 0` 을 붙이면 총건수 실패가 "리뷰 없음"이 되어 기존 엑셀 행이 지워짐 | Step 2·4 |
 | 기간 필터 판정 `filterOk` = 다이얼로그 닫힘 + 기간 **버튼 자신의** 두 날짜가 오늘−92일 ~ 오늘(±1일) | 본문 전체에서 라벨을 찾던 `labelOk` 로 되돌리면 열린 다이얼로그의 옵션 라벨을 잡아 **적용을 안 눌러도 true** 가 되고 6개월치를 3개월 현황으로 동기화한다(2026-09-20 재현, 당시 30일) | Step 2 `_applyPeriod` |
 | Step 2 반환에 `path`(host+pathname)만, `location.href` 없음 | 로그인 리다이렉트 URL 의 쿼리스트링 때문에 결과 전체가 `[BLOCKED: Cookie/query string data]` 로 차단돼 판정값을 못 읽는다(2026-09-20 재현). `shopIdOk` 도 pathname 기준 | Step 2 `_prepare` |
+| `_prepare` 맨 앞 렌더 대기 — 매장명·`등록된 가게가 없`·로그인 주소 중 하나가 보일 때까지(상한 8초, `renderWaitMs` 반환) 기다린 뒤 팝업 닫기·판정 | 빼면 navigate 직후 빈 본문(실측 innerText 0자)에서 재 `titleOk:false` → 로그인된 사용자에게 가짜 로그인 요청, 재시도도 같으면 그 매장 `ok:false`(2026-10-10 review-all 리허설 3/3·첫 실사용 1/3). 계정 불일치·로그아웃 표시에서 바로 빠져나가는 조건도 빼지 말 것 — 빼면 진짜 로그인 필요가 8초씩 늦어진다 | Step 2 `_prepare` |
 | `ok` 플래그 기본값이 실패 | 저장 스크립트의 `ok_stores` 필터를 빼면 실패 매장이 빈 배열로 동기화돼 저점수가 통째로 사라짐 | Step 4·5-2 |
 | `ok` 판정의 완전성 규칙 `수집 + 게시중단 ≥ 전체(N)` (미달이면 `누락 의심`, 초과면 ok 유지 + `warn`) + `parseFail > 10%` 실패 | 예전 98% 규칙으로 되돌리면 1~3건 누락이 통과한다. 6/6 매장 정확 일치 실측(2026-09-09·09-20) | Step 4 |
 | 파트너전용 라벨 `PK_LABEL` 은 플래그, 본문은 한 번만(`[파트너전용] 본문`) | 키워드 뒤 텍스트를 다시 잡던 `partner` 경로로 되돌리면 본문이 두 번 들어간다(9건 중 7건, 2026-09-20) | Step 2 `_parse` |
@@ -376,11 +377,11 @@ md5sum baemin-review-skill/SKILL.md "<스킬 호출 헤더의 Base directory>/SK
 컨테이너의 git 프록시가 이 저장소를 "세션의 인가 저장소 목록에 없음"으로 403 을
 냈다(`access denied by the git proxy`). 조직 정책 거부라 재시도해도 안 된다. 절차:
   1. 갱신할 파일을 `SendUserFile` → `device_commit_files` 로 사용자 폴더
-     (`$HOME/mnt/claude/`)에 내려놓는다(어차피 "파일로도 내려줘" 요건이다).
+     (`$HOME/mnt/review/`)에 내려놓는다(어차피 "파일로도 내려줘" 요건이다).
   2. `device_bash` 로 PC 에서 clone → 파일 복사 → commit → push:
      ```bash
      mkdir -p $HOME/skillwork && cd $HOME/skillwork && rm -rf repo && git clone -q https://github.com/LeeKwanBeom/baemin-review-skill repo && cd repo
-     cp "$HOME/mnt/claude/<내려놓은 파일>" audit/last-audit.md   # 필요한 파일마다
+     cp "$HOME/mnt/review/<내려놓은 파일>" audit/last-audit.md   # 필요한 파일마다
      git config user.email "<이메일>" && git config user.name "LeeKwanBeom"
      git add -A && git commit -q -m "<메시지>" && git push -q https://x-access-token:<토큰>@github.com/LeeKwanBeom/baemin-review-skill.git HEAD:main
      ```

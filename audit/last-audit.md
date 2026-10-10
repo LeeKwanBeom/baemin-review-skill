@@ -535,8 +535,69 @@ window._probe = async function(budgetMs = 24000, target = null, capMs = 500) {
 - 별도 세션 검증 회차 — 사용자 판단. 이번 변경은 사용자 요청 회차라 같은 세션에서 3매장 실제 실행으로 갈음했다.
 - 설치본 재업로드(사용자 몫 — 패키징까지만).
 
+## 렌더 대기 회차 (2026-10-10 — review-all 기록 이월 8, 사용자 요청)
+
+정기점검이 아니라 사용자가 요청한 고치기다. 작업 알고리즘의 "작은 작업"(작업 세션 = 이 세션, Opus 5.5 / 검증 = 다른 모델의 새 세션)으로 진행했다. 근거 기록: 사용자 폴더 `review-all_기록.md` 이월 8.
+
+### 증상 (실측)
+
+- review-all 리허설(2026-10-10 10:23~10:33 KST): Step 2가 navigate 바로 뒤에 돌아 `titleOk:false` → `stage:'login'`이 3/3(김치찜 재시도·곱도리·참 제육). 본문에 매장명이 있는 것을 확인하고 같은 페이지에서 `_prepare`만 다시 불러 진행했다.
+- 첫 실사용(같은 날 10:56~): 김치찜 2-A가 `titleOk:false, isLogin:false, noShop:false` → 2초 뒤 본문 1,448자·매장명 있음 → `_prepare` 재호출로 `ready`. 곱도리·참 제육은 2-B 앞에 임시 대기(매장명이 보일 때까지 250ms × 최대 20)를 넣어 한 번에 통과했다. 스킬 문구대로였다면 로그인된 사용자에게 로그인을 요청했을 것이다.
+- 렌더 시점 측정(11:0x, 계정B, 크롬 창 숨김): navigate 반환 직후 `document.body.innerText` **0자** → 참 제육 매장명·`전체(` 표시 969ms, 김치찜(계정 불일치) `등록된 가게가 없` 1003ms. 숨김이라 100ms 폴이 약 1초로 클램프된 값이므로 실제 렌더는 그 이하다.
+
+### 항목별 변경
+
+| 파일 | 위치 | 변경 |
+|---|---|---|
+| SKILL.md | Step 2 `_prepare` | 맨 앞에 렌더 대기 — 매장명 · `등록된 가게가 없` · 로그인 주소(`/login\|signin\|auth/`) 중 하나가 보일 때까지 200ms 간격, 상한 8초. 그 뒤 `_dismissAll`·판정은 그대로(`_dismissAll`은 대기 뒤로 옮김). 반환에 `renderWaitMs`. 주석 3줄 |
+| SKILL.md | Step 2 판정 `stage: 'login'` 불릿 | "`_prepare`가 렌더를 기다린 뒤 잰 값이다(`renderWaitMs`, 상한 8초)" 한 문장 |
+| SKILL.md | 트러블슈팅 | "로그인돼 있는데 `stage: 'login'`" 행 추가 |
+| SKILL.md | 경로·frontmatter(사용자 결정 — 저장소를 설치본에 맞춤) | 설치본(2026-10-10 09:43 KST 업로드, md5 `36eea64a…`)과 수정 전 저장소 a388183 `SKILL.md`(LF, md5 `d6a78149…`)의 차이는 8행뿐이었다: `name: "baemin-review"` 따옴표, `$HOME/mnt/claude` → `$HOME/mnt/review` 6행, 58행 `` `claude` 폴더`` → `` `review` 폴더``. 설치본을 그대로 가져온 뒤 위 세 변경을 얹었다 |
+| checklist.md | 머리말 버전 줄 · [되돌리면 안 되는 것] · 현재 절차 경로 | v7. `_prepare` 렌더 대기 행 추가. [시작 전 확인 ②·③]·[마무리]의 사용자 폴더 경로 5곳 `$HOME/mnt/claude` → `$HOME/mnt/review`(이력 문장은 그대로) |
+
+SKILL.md 769 → 778행, md5 `d5854dd062b8b10c74735945e94d7882`, 본문(`tail -n +3`) md5 `39490aff5c54e6e9a6f212000d0f1b70`. 재업로드 뒤 설치본 전체 md5가 이 값과 같아야 한다(이번부터 저장소도 `name` 따옴표).
+
+### 임의 결정
+
+1. 상한 8초 — 실측 렌더 약 1초(숨김 클램프 포함)의 여러 배이면서, Step 2 한 호출이 45초 CDP 한도 안에 들게(대기 8 + 팝업 ≤1.2 + 기간 필터 ≤약 7초).
+2. 빠져나가는 조건에 `등록된 가게가 없`·로그인 주소를 넣었다 — 계정 불일치·로그아웃이 8초씩 늦어지지 않게(실측 계정 불일치 0~1초).
+3. `_dismissAll`을 대기 뒤로 옮겼다 — 빈 본문에서는 팝업도 아직 없어 늘 `none`이다.
+4. 2-B 블록은 바꾸지 않았다 — 재주입되는 `_prepare`에 대기가 들어 있다. 첫 실사용에서 임시로 2-B 앞에 넣었던 대기는 넣지 않았다(한 곳에서만).
+5. `_lost`(스크롤 중 로그인 판정)·`_applyPeriod`는 손대지 않았다.
+
+### 실제 실행 (수정본 원문, 2026-10-10 11:0x KST, 계정B, 크롬 창 숨김 상태)
+
+| 경우 | 블록 | 결과 |
+|---|---|---|
+| 참 제육, navigate 바로 뒤(같은 browser_batch) | 2-A 전체판 | `renderWaitMs` 2694, `titleOk` true, `stage` ready, `filterOk` true, range `2026. 7. 10 (금) ~ 2026. 10. 10`, `expectedTotal` 315, `defsSaved` true |
+| 김치찜(계정A 매장)을 계정B로 — 계정 불일치 | 2-B 재주입판 | `renderWaitMs` 0, `noShop` true, `titleOk` false, `stage` login |
+| 참 제육 | 2-B 재주입판 | `renderWaitMs` 0, `stage` ready, `filterOk` true, `expectedTotal` 315 |
+
+2-B 두 경우가 0ms인 것은 재주입(localStorage 파싱·`eval`) 동안 페이지가 이미 그려졌기 때문이다. 수정 전에도 가짜 `stage:login`이 가장 잘 나던 자리는 매장 1의 2-A(정의 블록이 짧게 끝나는 쪽)였다 — 첫 실사용과 같은 모양.
+
+이어서 사용자가 크롬 창을 앞으로 꺼낸 뒤(11:2x, 창 가시) 끝까지 한 매장을 돌렸다. 그사이 크롬 로그인이 계정A로 바뀌어 있어 곱도리로 했다.
+
+| 경우 | 블록 | 결과 |
+|---|---|---|
+| (우연) 탭이 배민 홈 `self.baemin.com/`에 가 있던 상태에서 참 제육 `_prepare` | 2-B | `renderWaitMs` 8019(상한 도달), `titleOk` false, `stage` login, 팝업 `esc` 3회·`gone` false — **상한 경로가 그대로 `stage:login`을 내는 것 확인** |
+| 참 제육(계정A로 바뀐 뒤) navigate 바로 뒤 | 2-B | `renderWaitMs` 403, `noShop` true, `stage` login — 계정 불일치를 즉시 잡음 |
+| 곱도리 navigate 바로 뒤 → Step 3 → Step 4 | 2-B → `_scroll` 1회 → Step 4 원문 | `renderWaitMs` 412(창 가시 상태에서도 시작 시점엔 매장명이 없었다), `filterOk` true, ET 337 / `_scroll` 168R·16.9초·avgRoundMs 100·throttled 0 / Step 4 `ok` true, 331 + 6 = 337(`countMatch` true), `blockedKinds` temp 1·perm 2·deleted 3, dist 0/0/0/5/326, parseFail 0, warns 0 — **같은 날 첫 실사용(수정 전 코드) 곱도리 결과와 전부 같다** |
+
+### 수정 회차 검사
+
+`node --check` 6/6(자리표시자 치환·async 래핑, 수정 전 HEAD판도 6/6), 코드펜스 28(짝수), UTF-8 정상. 옛 문구 grep: `titleOk`는 `_prepare`·판정 불릿·트러블슈팅 새 행에만, `mnt/claude`는 SKILL.md 0건·checklist.md 버전 줄 이력만.
+
+### 하지 않은 것
+
+- 로그아웃 상태(로그인 리다이렉트) 실측 — 계정 로그인을 풀어야 해서 하지 않았다. 리다이렉트가 대기 도중에 일어나면 페이지 이동으로 호출이 도구 오류로 끝날 수 있다[추론].
+- Step 5(엑셀 저장), 재패키징·재업로드 — 검증 뒤.
+
 ## 다음 점검에서 대조할 것
 
+- (렌더 대기 회차 추가) 3매장 실행에서 가짜 `stage:'login'` 0건인지, `renderWaitMs` 분포(특히 매장 1의 2-A), 상한 8000에 닿은 적이 있는지.
+- (렌더 대기 회차 추가) 로그아웃 상태에서 Step 2가 어떻게 끝나는지 — 대기 도중 리다이렉트되면 도구 오류가 날 수 있다[추론]. 그때 판정 문구가 필요한지.
+- (렌더 대기 회차 추가) 설치본 md5가 저장소와 같은지 — 이번부터 저장소도 `name: "baemin-review"`라 재업로드 뒤 **전체 md5가 같아야 한다**.
+- (렌더 대기 회차 추가, 범위 밖) coupang-review 저장소도 설치본과 경로가 다른지(`mnt/claude` vs `mnt/review`).
 - (기간 변경 회차 추가) 3개월 첫 실제 실행: `blockedKinds` 가 보고되는지, 참 제육 `blocked` 8(perm 4·deleted 4) 근처인지와 "차단" 탭 숫자 = temp+perm 인지, 저점수 신규 건수, Step 4 `LEN:n` 경로가 실제로 쓰이고 5-1 `JSON_OK` 가 찍히는지.
 - (기간 변경 회차 추가) 김치찜 게시중단 2026082401079865 의 30일 해제 후 상태 — 3개월 창에서는 해제되면 정상 수집 대상(temp → 사라짐)이고, 영구 차단되면 perm 으로 남는다.
 - (기간 변경 회차 추가) 도구 쪽 `blob:` URL 거부가 유지되는지(되돌아와도 Blob 폴백을 되살리지 않는다 — 조각 읽기가 탭을 옮기지 않아 더 안전).
