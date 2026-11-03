@@ -675,6 +675,17 @@ SKILL.md 769 → 778행, md5 `d5854dd062b8b10c74735945e94d7882`, 본문(`tail -n
 2. 느린 첫 호출 25초 절약(안 2 계열) — 실사용에서 요청이 자주 나면 다시 본다.
 3. 이 PC 크롬 플래그(`CalculateNativeWinOcclusion` 끔)와 `hidden` 관계 실측 — [추론]으로만 적었다.
 
+### 검증 기록 (④ — 2026-11-03, Sonnet 5.5, 별도 세션)
+
+판정: **다음 단계로 가도 된다 · 막음 0건.** 대상 `impl-bgslow-20261103` HEAD `9d1c633`(SKILL.md md5 `3cc151ddcc4735260cda17869f572122`). 완료 기준 1~7 참(시험 71/71 · replay 103건 다시 돌려 저장본과 diff 0 · 문서 숫자 8곳 일치), 8(실제 환경 리허설)은 아직 참 아님(막음 기준 밖), 9는 병합 뒤. 쓰기 0 확인. 전문: `D:\review-verify\배민창앞감지_검증_2026-11-03.md`(이월·참고 7건 포함).
+
+### ⑥ 병합 (2026-11-03, 부모 세션 — 사용자 "병합해")
+
+- main `0850a4b` → `9d1c633` fast-forward(커밋 18d0f68 · 9d1c633). push 하지 않음(origin/main 보다 앞섬).
+- 설치본(`Claude-Data\…\skills-plugin\…\skills\baemin-review\SKILL.md`) 교체 전 백업: `D:\review-verify\baemin-review-install-backup-20261103\SKILL.md`(md5 `d5854dd0…`, 778행).
+- 설치본을 `git show main:SKILL.md`(LF)로 덮어씀 → 설치본 · main · 브랜치 md5 셋 다 `3cc151ddcc4735260cda17869f572122`, 789행, CR 0 — 완료 기준 9 참.
+- claude.ai 재업로드는 사용자 몫(하지 않음). 완료 기준 8(리허설)은 병합 뒤 첫 실사용(`/q-review-all` 배민 차례) 입회로 확인한다 — 아래 "다음 점검에서 대조할 것" 첫 항목.
+
 ## 다음 점검에서 대조할 것
 
 - (반쯤 가려짐 감지 회차 추가) 실사용에서 `bgSlow: true`가 나온 날·매장·첫 호출 값, 요청 뒤 속도가 91~105ms로 돌아오는지, 창이 앞인데 `bgSlow`가 나온 적(헛경보)이 있는지.
