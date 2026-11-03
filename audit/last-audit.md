@@ -685,6 +685,14 @@ SKILL.md 769 → 778행, md5 `d5854dd062b8b10c74735945e94d7882`, 본문(`tail -n
 - 설치본(`Claude-Data\…\skills-plugin\…\skills\baemin-review\SKILL.md`) 교체 전 백업: `D:\review-verify\baemin-review-install-backup-20261103\SKILL.md`(md5 `d5854dd0…`, 778행).
 - 설치본을 `git show main:SKILL.md`(LF)로 덮어씀 → 설치본 · main · 브랜치 md5 셋 다 `3cc151ddcc4735260cda17869f572122`, 789행, CR 0 — 완료 기준 9 참.
 - claude.ai 재업로드는 사용자 몫(하지 않음). 완료 기준 8(리허설)은 병합 뒤 첫 실사용(`/q-review-all` 배민 차례) 입회로 확인한다 — 아래 "다음 점검에서 대조할 것" 첫 항목.
+- 같은 날 push(origin/main 8b826c6)와 claude.ai 재업로드(v3)도 사용자 요청으로 했다.
+
+### 문구 다듬기 (2026-11-03, 부모 세션 — 사용자 "문구도 지금 고쳐줘")
+
+- 사용자: 크롬(Claude in Chrome)과 Claude 앱(Code 탭)이 다른 컴퓨터다. 창 꺼내기 요청의 "Claude 앱에 가려지지 않게"가 이 배치에 맞지 않는다.
+- SKILL.md 요청 문장 3곳(3-1 hidden · 3-2 throttled · 3-2 bgSlow — 셋은 계속 글자 그대로 같다)을 "크롬이 있는 컴퓨터에서 크롬 창을 화면 앞으로 꺼내 주시고(최소화 해제, 다른 창에 가려지지 않게) '꺼냈어요'라고 알려주세요."로 바꿨다.
+- 트러블슈팅 "Step 2 결과 `hidden: true`" 행 원인 칸: "보통 Claude 앱"을 "같은 컴퓨터면 보통 Claude 앱 · 다른 컴퓨터면 그 컴퓨터의 다른 창"으로 바꿨다.
+- 코드 블록·판정 무변경(문구만). 설계 근거의 옛 실측 문장(2026-09-09·09-20 "보통 Claude 앱")은 그때 기록이라 두었다.
 
 ## 다음 점검에서 대조할 것
 
